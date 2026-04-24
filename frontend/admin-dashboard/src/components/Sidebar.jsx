@@ -78,7 +78,7 @@ const NAV_SECTIONS = [
   },
 ];
 
-// ─── Active Users Panel ────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 const timeAgo = (dateStr) => {
   if (!dateStr) return "Never";
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
@@ -96,9 +96,9 @@ const roleColor = (role) => {
   }
 };
 
-// ← fixed: was /auth/active-users/ — must match urls.py
 const ACTIVE_USERS_URL = "/accounts/active-users/";
 
+// ─── Active Users Panel ────────────────────────────────────────────────────────
 const ActiveUsersPanel = ({ onClose }) => {
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -300,6 +300,18 @@ const LogoutConfirm = ({ onConfirm, onCancel }) => (
   </div>
 );
 
+// ─── Tooltip ───────────────────────────────────────────────────────────────────
+const Tooltip = ({ label, badge }) => (
+  <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg transition-opacity">
+    {label}
+    {badge > 0 && (
+      <span className="ml-1.5 bg-amber-400 text-gray-900 text-[10px] font-bold px-1.5 rounded-full">
+        {badge}
+      </span>
+    )}
+  </span>
+);
+
 // ─── Main Sidebar ──────────────────────────────────────────────────────────────
 const Sidebar = ({ collapsed, onToggle }) => {
   const user = useMemo(() => getUser(), []);
@@ -324,7 +336,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
     }
   }, []);
 
-  // ← fixed: was /auth/active-users/
   const loadActiveUsers = useCallback(async () => {
     try {
       const res = await API.get(ACTIVE_USERS_URL);
@@ -336,8 +347,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
   }, []);
 
   useEffect(() => {
-    // Small delay so the app has time to refresh an expired token before
-    // the sidebar fires its background requests.
     const initTimer = setTimeout(() => {
       loadApprovals();
       loadActiveUsers();
@@ -352,7 +361,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
     };
   }, [loadApprovals, loadActiveUsers]);
 
-  const badges  = { approvals: pendingCount };
+  const badges   = { approvals: pendingCount };
   const initials = (user?.username || user?.email || "A")[0].toUpperCase();
 
   return (
@@ -371,12 +380,12 @@ const Sidebar = ({ collapsed, onToggle }) => {
           }`}
         >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0 shadow">
-            <span className="text-xs font-extrabold text-white">LS</span>
+            <span className="text-xs font-extrabold text-white">TR</span>
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight truncate">Lea inttatars
-              <p className="text-xs text-gray-400 leading-tight">Acadmmy
+              <p className="text-sm font-bold leading-tight truncate">Top Ridge</p>
+              <p className="text-xs text-gray-400 leading-tight">Academy</p>
             </div>
           )}
         </div>
@@ -412,7 +421,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
           title={collapsed ? "Active Users" : undefined}
           className={`mx-2 mb-1 flex items-center gap-3 px-3 py-2.5 rounded-lg
             text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20
-            hover:border-emerald-500/40 transition-all group text-sm
+            hover:border-emerald-500/40 transition-all group text-sm relative
             ${collapsed ? "justify-center" : ""}
           `}
         >
@@ -433,7 +442,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
               </span>
             </>
           )}
-
           {collapsed && (
             <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg transition-opacity">
               Active Users
@@ -500,14 +508,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                           )}
 
                           {collapsed && (
-                            <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg transition-opacity">
-                              {item.name}
-                              {badge > 0 && (
-                                <span className="ml-1.5 bg-amber-400 text-gray-900 text-[10px] font-bold px-1.5 rounded-full">
-                                  {badge}
-                                </span>
-                              )}
-                            </span>
+                            <Tooltip label={item.name} badge={badge} />
                           )}
                         </>
                       )}
@@ -524,14 +525,13 @@ const Sidebar = ({ collapsed, onToggle }) => {
           <button
             onClick={() => setShowLogoutModal(true)}
             title={collapsed ? "Sign Out" : undefined}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400
+            className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400
               hover:bg-red-600/20 hover:text-red-400 transition-all group text-sm
               ${collapsed ? "" : "w-full"}
             `}
           >
             <FaSignOutAlt className="flex-shrink-0 text-base group-hover:text-red-400" />
             {!collapsed && <span className="font-medium">Sign Out</span>}
-
             {collapsed && (
               <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg transition-opacity">
                 Sign Out
