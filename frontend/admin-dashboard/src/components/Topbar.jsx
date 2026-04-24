@@ -180,10 +180,10 @@ const Topbar = ({ onMenuToggle, sidebarOpen }) => {
       {/* ── Brand ── */}
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-[10px] font-black tracking-tight">LSA</span>
+          <span className="text-white text-[10px] font-black tracking-tight">LAA</span>
         </div>
         <div className="hidden sm:flex flex-col leading-none min-w-0">
-          <span className="text-[13px] font-bold text-slate-800 truncate">Leading Stars Academy</span>
+          <span className="text-[13px] font-bold text-slate-800 truncate">Lea inttatars Arademyademyademy</span>
           <span className="text-[11px] text-slate-400 mt-0.5">Admin portal</span>
         </div>
       </div>

@@ -85,8 +85,8 @@ const Login = () => {
         <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-5">
           <span className="text-2xl font-medium text-white">LS</span>
         </div>
-        <h1 className="text-3xl font-medium mb-1 text-center">Leading Stars Academy</h1>
-        <p className="text-blue-300 text-sm mb-10">Where Leaders Are Born</p>
+        <h1 className="text-3xl font-medium mb-1 text-center">Top Ridge School</h1>
+        <p className="text-blue-300 text-sm mb-10">Centre of distinction</p>
         <div className="space-y-3 w-full max-w-xs">
           {[
             { icon: <FaUserShield />,        text: "Admins — full system access"            },
@@ -214,10 +214,10 @@ const Login = () => {
                 <p>{forgotContent.body}</p>
                 {forgotContent.showContact && (
                   <div className="flex gap-2 mt-3">
-                      <a href="mailto:admin@leadingstars.edu" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-800 hover:bg-amber-100 transition-colors">
+                      <a href="mailto:admin@topridgeschool.edu" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-800 hover:bg-amber-100 transition-colors">
                         <FaEnvelope className="text-[10px]" /> Email admin
                       </a>
-                      <a href="tel:+000000000" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-800 hover:bg-amber-100 transition-colors">
+                      <a href="tel:+254712345678" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-800 hover:bg-amber-100 transition-colors">
                         <FaPhone className="text-[10px]" /> Call office
                       </a>
                     </div>

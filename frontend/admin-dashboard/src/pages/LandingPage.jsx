@@ -771,9 +771,9 @@ const Footer = () => (
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#fff", marginBottom: "1.5rem" }}>Contact</div>
           {[
-            { icon: "📍", val: "No. 1 Top Ridge Road, Accra, Ghana" },
-            { icon: "📞", val: "+233 30 000 0000" },
-            { icon: "✉", val: "info@topridgeschool.edu.gh" },
+            { icon: "📍", val: "North Kwashieman, Accra, Ghana" },
+            { icon: "📞", val: "+233 271591079" },
+            { icon: "✉", val: "topridgeschool@yahoo.com" },
             { icon: "🕗", val: "Mon–Fri: 7:30 AM – 5:00 PM" },
           ].map(c => (
             <div key={c.icon} style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12, fontSize: 13, color: "rgba(255,255,255,.5)" }}>

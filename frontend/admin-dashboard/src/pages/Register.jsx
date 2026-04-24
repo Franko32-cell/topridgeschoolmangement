@@ -38,10 +38,10 @@ const Register = () => {
         <div className="hidden md:flex w-1/2 bg-gradient-to-br from-blue-800 to-blue-600 text-white items-center justify-center p-12">
           <div className="text-center">
             <div className="w-24 h-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="text-4xl font-extrabold text-white">LS</span>
+              <span className="text-4xl font-extrabold text-white">TR</span>
             </div>
-            <h1 className="text-4xl font-extrabold mb-3">Leading Stars Academy</h1>
-            <p className="text-blue-200 text-lg">Where Leaders Are Born</p>
+            <h1 className="text-4xl font-extrabold mb-3">Top Ridge School</h1>
+            <p className="text-blue-200 text-lg">Centre of distinction</p>
           </div>
         </div>
 
@@ -91,10 +91,10 @@ const Register = () => {
       <div className="hidden md:flex w-1/2 bg-gradient-to-br from-blue-800 to-blue-600 text-white items-center justify-center p-12">
         <div className="text-center">
           <div className="w-24 h-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="text-4xl font-extrabold text-white">LS</span>
+            <span className="text-4xl font-extrabold text-white">TR</span>
           </div>
-          <h1 className="text-4xl font-extrabold mb-3">Leading Stars Academy</h1>
-          <p className="text-blue-200 text-lg">Where Leaders Are Born</p>
+          <h1 className="text-4xl font-extrabold mb-3">Top Ridge School</h1>
+          <p className="text-blue-200 text-lg">Centre of distinction</p>
           <div className="mt-10 p-4 bg-white bg-opacity-10 rounded-xl text-left text-sm text-blue-100 space-y-2">
             <div className="flex items-center gap-2">
               <FaUserShield className="text-blue-300" />
@@ -117,7 +117,7 @@ const Register = () => {
               <FaUserShield className="text-white text-xl" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800">Create Admin Account</h2>
-            <p className="text-sm text-gray-400 mt-1">Leading Stars Academy</p>
+            <p className="text-sm text-gray-400 mt-1">Top Ridge School</p>
           </div>
 
           {/* Approval notice banner */}

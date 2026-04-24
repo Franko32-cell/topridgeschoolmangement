@@ -213,10 +213,10 @@ const Reports = () => {
           <div className="bg-blue-700 text-white p-6 rounded-t-lg flex justify-between items-start">
             <div>
               <h2 className="text-xl font-bold">
-                {report.school_name || "LEADING STARS ACADEMY"}
+                {report.school_name || "TOP RIDGE SCHOOL"}
               </h2>
               <p className="text-blue-100 text-xs mt-0.5">
-                {level === "nursery_kg" ? "GLOBAL LEADERS" : "WHERE LEADERS ARE BORN"}
+                CENTRE OF DISTINCTION
               </p>
               <p className="text-blue-200 text-sm mt-2">{report.student}</p>
               <p className="text-blue-200 text-sm">Admission No: {report.admission_number || "-"}</p>

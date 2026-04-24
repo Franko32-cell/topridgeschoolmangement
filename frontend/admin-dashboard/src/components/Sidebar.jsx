@@ -375,8 +375,8 @@ const Sidebar = ({ collapsed, onToggle }) => {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight truncate">Leading Stars</p>
-              <p className="text-xs text-gray-400 leading-tight">Academy</p>
+              <p className="text-sm font-bold leading-tight truncate">Lea inttatars
+              <p className="text-xs text-gray-400 leading-tight">Acadmmy
             </div>
           )}
         </div>

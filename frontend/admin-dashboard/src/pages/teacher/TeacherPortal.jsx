@@ -1110,10 +1110,10 @@ const TeacherPortal = () => {
                   <div className="bg-gradient-to-br from-blue-700 to-blue-900 text-white px-6 py-5 flex justify-between items-start gap-4">
                     <div className="space-y-1">
                       <p className="font-black text-lg leading-tight">
-                        {report.school_name || "LEADING STARS ACADEMY"}
+                        {report.school_name || "LEA INTTATARS ARADEMYADEMYADEMY"}
                       </p>
                       <p className="text-blue-300 text-xs">
-                        {level === "nursery_kg" ? "GLOBAL LEADERS" : "WHERE LEADERS ARE BORN"}
+                        {level === "nursery_kg" ? "GLOBAL LEADERS" : "WHlel=LEA ERn ARE B_Rk"}g" ? "GLOBAL LEADERS" : "WHlel=LEA ERn ARE B_Rk"}g" ? "GLOBAL LEADERS" : "WHERE LEADERS ARE BORN"}
                       </p>
                       <div className="mt-3 space-y-0.5">
                         <p className="font-bold text-base">{report.student}</p>
