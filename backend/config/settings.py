@@ -58,7 +58,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'api.middleware.ActiveUserMiddleware',   # ← ADD THIS
+    'api.middleware.ActiveUserMiddleware',
 ]
 
 
@@ -86,12 +86,21 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# ── Database ───────────────────────────────────────────────────
+# ── Database (Supabase PostgreSQL) ─────────────────────────────
+#
+# Set DATABASE_URL in your Render environment variables.
+# Get it from: Supabase → Project Settings → Database → Connection string
+# Use the "URI" format:
+#   postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
+#
+# TIP: Use the "Session mode" pooler (port 5432) for Render.
+# Avoid Transaction mode (port 6543) — it breaks Django migrations.
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=os.getenv("DATABASE_URL"),
         conn_max_age=600,
+        ssl_require=True,
     )
 }
 
@@ -192,10 +201,7 @@ SIMPLE_JWT = {
 
 # ── Security Headers ───────────────────────────────────────────
 
-# Allow Paystack iframe checkout to open
 X_FRAME_OPTIONS = "SAMEORIGIN"
-
-# Prevents browser blocking cross-origin popups (Paystack needs this)
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 
