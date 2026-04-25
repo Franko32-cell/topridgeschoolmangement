@@ -191,7 +191,7 @@ const useCounter = (end, duration = 1800) => {
   return { val, ref };
 };
 
-const LOGO_URL = "/assets/logo.jpeg";
+const LOGO_URL = "/assets/logo1.jpg";
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 const SLabel = ({ children, light }) => (
