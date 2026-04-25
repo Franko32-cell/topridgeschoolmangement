@@ -415,19 +415,21 @@ const About = () => {
       <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
         {/* Visual */}
         <div className="reveal" style={{ position: "relative", height: 500 }}>
-          <div style={{ position: "absolute", top: 0, left: 0, width: "74%", height: "84%", borderRadius: 20, overflow: "hidden", background: `linear-gradient(150deg,${C.navyMid},${C.green})`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 20px 60px rgba(12,35,64,.2)" }}>
-            <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "5rem", color: "rgba(255,255,255,.15)", fontWeight: 700, fontStyle: "italic" }}>TRS</span>
-            {/* Year badge */}
-            <div style={{ position: "absolute", top: "1.5rem", right: "1.5rem", background: C.navy, borderRadius: 12, padding: "14px 18px", textAlign: "center", boxShadow: "0 8px 28px rgba(12,35,64,.3)" }}>
-              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "1.9rem", fontWeight: 700, color: C.goldBright, lineHeight: 1 }}>2005</div>
-              <div style={{ fontSize: 9, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginTop: 2 }}>Est.</div>
-            </div>
+          <div style={{ position: "absolute", top: 0, left: 0, width: "74%", height: "84%", borderRadius: 20, overflow: "hidden", boxShadow: "0 20px 60px rgba(12,35,64,.2)" }}>
+            <img src="/assets/hero4.png" alt="Top Ridge Students" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(12,35,64,.3), transparent)" }} />
           </div>
-          <div style={{ position: "absolute", bottom: 0, right: 0, width: "52%", height: "52%", borderRadius: 20, background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, display: "flex", alignItems: "center", justifyContent: "center", border: `4px solid ${C.cream}` }}>
-            <span style={{ fontSize: "2.5rem", opacity: .3 }}>🏫</span>
-            <div style={{ position: "absolute", bottom: -14, left: "50%", transform: "translateX(-50%)", background: C.white, border: `1px solid ${C.border}`, borderRadius: 99, padding: "7px 16px", fontSize: 11.5, fontWeight: 600, color: C.navy, whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,.08)" }}>
-              📍 Accra, Ghana
-            </div>
+          <div style={{ position: "absolute", bottom: 0, right: 0, width: "52%", height: "52%", borderRadius: 20, overflow: "hidden", border: `4px solid ${C.cream}`, boxShadow: "0 12px 40px rgba(12,35,64,.15)" }}>
+            <img src="/assets/hero5.png" alt="Nursery Learning" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <div style={{ position: "absolute", inset: 0, background: "rgba(12,35,64,.1)" }} />
+          </div>
+          <div style={{ position: "absolute", bottom: -14, right: "26%", transform: "translateX(50%)", background: C.white, border: `1px solid ${C.border}`, borderRadius: 99, padding: "7px 16px", fontSize: 11.5, fontWeight: 600, color: C.navy, whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,.08)", zIndex: 10 }}>
+            📍 North Kwashieman, Accra
+          </div>
+          {/* Est. badge */}
+          <div style={{ position: "absolute", top: "1.5rem", left: "calc(74% - 80px)", background: C.navy, borderRadius: 12, padding: "14px 18px", textAlign: "center", boxShadow: "0 8px 28px rgba(12,35,64,.3)", zIndex: 10 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "1.9rem", fontWeight: 700, color: C.goldBright, lineHeight: 1 }}>2005</div>
+            <div style={{ fontSize: 9, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginTop: 2 }}>Est.</div>
           </div>
           {/* Gold corner accent */}
           <div style={{ position: "absolute", top: -18, left: -18, width: 100, height: 100, borderRadius: 4, background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, opacity: .12, zIndex: -1 }} />
@@ -469,9 +471,9 @@ const About = () => {
 // PROGRAMMES
 // ══════════════════════════════════════════════════════════════════════════════
 const PROGS = [
-  { emoji: "🌱", gradient: "linear-gradient(150deg,#F6AF3A,#F4845F)", level: "Foundation", name: "Nursery & Kindergarten", desc: "Play-based, child-centred learning that builds curiosity, social skills, and early literacy from the very first days of school.", ages: "Ages 2 – 6", href: "/nursery-kg" },
-  { emoji: "📖", gradient: "linear-gradient(150deg,#22C55E,#0EA5E9)", level: "Primary", name: "Basic 1 – 6", desc: "Strong foundations in literacy, numeracy, science, and creative thinking across six formative years of guided exploration.", ages: "Ages 6 – 12", href: "/primary" },
-  { emoji: "🎓", gradient: "linear-gradient(150deg,#3B82F6,#8B5CF6)", level: "Junior High", name: "Basic 7 – 9 (JHS)", desc: "Rigorous BECE preparation with leadership development, clubs, and career-readiness programmes for the future.", ages: "Ages 12 – 15", href: "/jhs" },
+  { image: "/assets/hero5.png", level: "Foundation", name: "Nursery & Kindergarten", desc: "Play-based, child-centred learning that builds curiosity, social skills, and early literacy from the very first days of school.", ages: "Ages 2 – 6", href: "/nursery-kg" },
+  { image: "/assets/hero3.png", level: "Primary", name: "Basic 1 – 6", desc: "Strong foundations in literacy, numeracy, science, and creative thinking across six formative years of guided exploration.", ages: "Ages 6 – 12", href: "/primary" },
+  { image: "/assets/hero4.png", level: "Junior High", name: "Basic 7 – 9 (JHS)", desc: "Rigorous BECE preparation with leadership development, clubs, and career-readiness programmes for the future.", ages: "Ages 12 – 15", href: "/jhs" },
 ];
 
 const Programmes = () => (
@@ -488,12 +490,12 @@ const Programmes = () => (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
         {PROGS.map((p, i) => (
           <a key={p.href} href={p.href} className={`prog-card reveal ${i > 0 ? `d${i+1}` : ""}`} style={{ borderRadius: 20, overflow: "hidden", border: `1px solid ${C.border}`, textDecoration: "none", background: C.white, display: "block", position: "relative", transition: "all .35s" }}>
-            <div style={{ height: 190, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3.5rem", position: "relative", overflow: "hidden", background: p.gradient }}>
-              <span style={{ position: "relative", zIndex: 1 }}>{p.emoji}</span>
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(to top,rgba(12,35,64,.3),transparent)" }} />
+            <div style={{ height: 190, position: "relative", overflow: "hidden" }}>
+              <img src={p.image} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", transition: "transform .5s ease" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.5),transparent)" }} />
+              <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(12,35,64,.7)", backdropFilter: "blur(8px)", borderRadius: 99, padding: "4px 12px", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.goldBright }}>{p.level}</div>
             </div>
             <div style={{ padding: "1.6rem", paddingBottom: "3.5rem" }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.gold, marginBottom: 8 }}>{p.level}</div>
               <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "1.35rem", color: C.navy, marginBottom: 10, lineHeight: 1.25, fontWeight: 600 }}>{p.name}</div>
               <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: "1.25rem" }}>{p.desc}</div>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(12,35,64,.05)", borderRadius: 99, padding: "5px 14px", fontSize: 12, color: C.navy, fontWeight: 500 }}>{p.ages}</div>
@@ -505,7 +507,6 @@ const Programmes = () => (
     </div>
   </section>
 );
-
 // ══════════════════════════════════════════════════════════════════════════════
 // STATS
 // ══════════════════════════════════════════════════════════════════════════════
@@ -555,7 +556,7 @@ const News = () => (
       <div className="reveal" style={{ display: "grid", gridTemplateColumns: "5fr 3fr", gap: "1.75rem" }}>
         {/* Featured */}
         <a href="/news/sports-day" className="news-featured" style={{ position: "relative", borderRadius: 20, overflow: "hidden", minHeight: 460, display: "flex", alignItems: "flex-end", textDecoration: "none", background: `linear-gradient(135deg,${C.navy},${C.green})` }}>
-          <div className="news-bg" style={{ position: "absolute", inset: 0, backgroundImage: "url(https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80)", backgroundSize: "cover", backgroundPosition: "center", transition: "transform .7s" }} />
+          <div className="news-bg" style={{ position: "absolute", inset: 0, backgroundImage:"url(/assets/hero6.png)", backgroundSize: "cover", backgroundPosition: "center", transition: "transform .7s" }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.95) 0%,rgba(12,35,64,.35) 55%,rgba(12,35,64,.1) 100%)" }} />
           <div style={{ position: "relative", zIndex: 1, padding: "2.5rem", color: "#fff" }}>
             <span style={{ display: "inline-block", background: C.gold, color: C.navy, fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", padding: "4px 12px", borderRadius: 99, marginBottom: 14 }}>Sports</span>
