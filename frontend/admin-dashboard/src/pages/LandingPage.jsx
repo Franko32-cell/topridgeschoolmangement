@@ -416,11 +416,11 @@ const About = () => {
         {/* Visual */}
         <div className="reveal" style={{ position: "relative", height: 500 }}>
           <div style={{ position: "absolute", top: 0, left: 0, width: "74%", height: "84%", borderRadius: 20, overflow: "hidden", boxShadow: "0 20px 60px rgba(12,35,64,.2)" }}>
-            <img src="/assets/hero4.png" alt="Top Ridge Students" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
+            <img src="/assets/hero3.png" alt="Top Ridge Students" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(12,35,64,.3), transparent)" }} />
           </div>
           <div style={{ position: "absolute", bottom: 0, right: 0, width: "52%", height: "52%", borderRadius: 20, overflow: "hidden", border: `4px solid ${C.cream}`, boxShadow: "0 12px 40px rgba(12,35,64,.15)" }}>
-            <img src="/assets/hero5.png" alt="Nursery Learning" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src="/assets/hero1.png" alt="Nursery Learning" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             <div style={{ position: "absolute", inset: 0, background: "rgba(12,35,64,.1)" }} />
           </div>
           <div style={{ position: "absolute", bottom: -14, right: "26%", transform: "translateX(50%)", background: C.white, border: `1px solid ${C.border}`, borderRadius: 99, padding: "7px 16px", fontSize: 11.5, fontWeight: 600, color: C.navy, whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,.08)", zIndex: 10 }}>
@@ -471,8 +471,8 @@ const About = () => {
 // PROGRAMMES
 // ══════════════════════════════════════════════════════════════════════════════
 const PROGS = [
-  { image: "/assets/hero5.png", level: "Foundation", name: "Nursery & Kindergarten", desc: "Play-based, child-centred learning that builds curiosity, social skills, and early literacy from the very first days of school.", ages: "Ages 2 – 6", href: "/nursery-kg" },
-  { image: "/assets/hero3.png", level: "Primary", name: "Basic 1 – 6", desc: "Strong foundations in literacy, numeracy, science, and creative thinking across six formative years of guided exploration.", ages: "Ages 6 – 12", href: "/primary" },
+  { image: "/assets/hero6.png", level: "Foundation", name: "Nursery & Kindergarten", desc: "Play-based, child-centred learning that builds curiosity, social skills, and early literacy from the very first days of school.", ages: "Ages 2 – 6", href: "/nursery-kg" },
+  { image: "/assets/hero5.png", level: "Primary", name: "Basic 1 – 6", desc: "Strong foundations in literacy, numeracy, science, and creative thinking across six formative years of guided exploration.", ages: "Ages 6 – 12", href: "/primary" },
   { image: "/assets/hero4.png", level: "Junior High", name: "Basic 7 – 9 (JHS)", desc: "Rigorous BECE preparation with leadership development, clubs, and career-readiness programmes for the future.", ages: "Ages 12 – 15", href: "/jhs" },
 ];
 
