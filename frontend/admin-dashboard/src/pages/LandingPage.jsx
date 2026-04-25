@@ -137,16 +137,37 @@ body { font-family: 'DM Sans', sans-serif; color: ${C.text}; background: ${C.whi
 
 // ── Smart Image Component ─────────────────────────────────────────────────────
 const Img = ({ src, alt, style = {}, className = "", objectPosition = "center" }) => {
-  const [status, setStatus] = useState("loading"); // loading | loaded | error
+  const [status, setStatus] = useState("loading");
 
-  // Reset to loading whenever src changes
   useEffect(() => { setStatus("loading"); }, [src]);
 
   if (!src) return (
     <div className={`img-wrap loaded ${className}`} style={style}>
-      <div className="img-err"><span style={{ fontSize: 28, opacity: .35 }}>🏫</span><span style={{ fontSize: 11, opacity: .5 }}>{alt || "Image"}</span></div>
+      <div className="img-err"><span style={{ fontSize: 28, opacity: .35 }}>🏫</span></div>
     </div>
   );
+
+  return (
+    <div className={`img-wrap ${status === "loaded" ? "loaded" : ""} ${className}`} style={style}>
+      {status === "error" ? (
+        <div className="img-err">
+          <span style={{ fontSize: 28, opacity: .35 }}>🏫</span>
+          <span style={{ fontSize: 11, opacity: .5 }}>{alt}</span>
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("error")}
+          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition, display: "block" }}
+        />
+      )}
+    </div>
+  );
+};
 
   return (
     <div className={`img-wrap ${status === "loaded" ? "loaded" : ""} ${className}`} style={style}>
@@ -698,7 +719,7 @@ const News = () => (
         {/* Featured */}
         <a href="/news/sports-day" className="news-featured" style={{ position: "relative", borderRadius: 20, overflow: "hidden", minHeight: 460, display: "flex", alignItems: "flex-end", textDecoration: "none" }}>
           <div className="news-bg" style={{ position: "absolute", inset: 0, transition: "transform .7s", overflow: "hidden" }}>
-            <Img src="/assets/hero7.png" alt="Sports Day" style={{ width: "100%", height: "100%" }} />
+            <Img src="/assets/hero7.jpeg" alt="Sports Day" style={{ width: "100%", height: "100%" }} />
           </div>
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.95) 0%,rgba(12,35,64,.35) 55%,rgba(12,35,64,.1) 100%)", pointerEvents: "none" }} />
           <div style={{ position: "relative", zIndex: 1, padding: "2.5rem", color: "#fff" }}>
