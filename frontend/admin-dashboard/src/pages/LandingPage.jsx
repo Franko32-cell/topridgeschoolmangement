@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react"; // useRef used in useCounter
 
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@300;400;500;600&family=Libre+Baskerville:ital@1&display=swap');
@@ -138,18 +138,15 @@ body { font-family: 'DM Sans', sans-serif; color: ${C.text}; background: ${C.whi
 // ── Smart Image Component ─────────────────────────────────────────────────────
 const Img = ({ src, alt, style = {}, className = "", objectPosition = "center" }) => {
   const [status, setStatus] = useState("loading"); // loading | loaded | error
-  const imgRef = useRef(null);
 
-  useEffect(() => {
-    setStatus("loading");
-    if (!src) { setStatus("error"); return; }
-    const img = new window.Image();
-    img.onload = () => setStatus("loaded");
-    img.onerror = () => setStatus("error");
-    img.src = src;
-    // If cached/instant
-    if (img.complete) setStatus("loaded");
-  }, [src]);
+  // Reset to loading whenever src changes
+  useEffect(() => { setStatus("loading"); }, [src]);
+
+  if (!src) return (
+    <div className={`img-wrap loaded ${className}`} style={style}>
+      <div className="img-err"><span style={{ fontSize: 28, opacity: .35 }}>🏫</span><span style={{ fontSize: 11, opacity: .5 }}>{alt || "Image"}</span></div>
+    </div>
+  );
 
   return (
     <div className={`img-wrap ${status === "loaded" ? "loaded" : ""} ${className}`} style={style}>
@@ -160,11 +157,12 @@ const Img = ({ src, alt, style = {}, className = "", objectPosition = "center" }
         </div>
       ) : (
         <img
-          ref={imgRef}
           src={src}
           alt={alt}
           loading="lazy"
           decoding="async"
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("error")}
           style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition, display: "block" }}
         />
       )}
