@@ -97,8 +97,7 @@ const useCounter = (end, duration = 1800) => {
 };
 
 // ── Logo (actual URL) ─────────────────────────────────────────────────────────
-const LOGO_URL = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRfwulVfCvHUUVjsStFi8YD3V_rYQZCQ8BrIw&s";
-
+const LOGO_URL = "/assets/logo.jpeg";
 // ══════════════════════════════════════════════════════════════════════════════
 // TOPBAR
 // ══════════════════════════════════════════════════════════════════════════════
@@ -223,9 +222,9 @@ const Navbar = () => {
 // HERO
 // ══════════════════════════════════════════════════════════════════════════════
 const SLIDES = [
-  "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1600&q=80",
-  "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1600&q=80",
-  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=1600&q=80",
+  "/assets/hero1.png",
+  "/assets/hero2.png",
+  "/assets/hero3.png",
 ];
 const QUICK = [
   { icon: "🎓", label: "Student Portal — Results & Fees", href: "/portal/student" },
