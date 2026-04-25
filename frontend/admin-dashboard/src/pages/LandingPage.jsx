@@ -1,21 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 
-// ── Google Fonts ──────────────────────────────────────────────────────────────
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@300;400;500;600&family=Libre+Baskerville:ital@1&display=swap');
 `;
 
-// ── Brand palette (matched to TRS shield logo) ────────────────────────────────
-// Logo: deep navy shield, gold lettering/crown, forest-green lower band, white dove
 const C = {
-  navy:       "#0C2340",   // deep shield navy
+  navy:       "#0C2340",
   navyMid:    "#163459",
   navyLight:  "#1E4A7A",
-  gold:       "#B8922A",   // logo gold
+  gold:       "#B8922A",
   goldMid:    "#D4A832",
   goldBright: "#EEC34A",
   goldPale:   "#FBF0CC",
-  green:      "#1A5C3A",   // logo green band
+  green:      "#1A5C3A",
   greenLight: "#226B47",
   cream:      "#F7F3EA",
   creamDark:  "#EDE8DA",
@@ -25,7 +22,6 @@ const C = {
   border:     "#DDD8CE",
 };
 
-// ── Keyframe CSS ──────────────────────────────────────────────────────────────
 const GLOBAL_CSS = `
 ${FONTS}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -37,7 +33,23 @@ body { font-family: 'DM Sans', sans-serif; color: ${C.text}; background: ${C.whi
 @keyframes ticker   { 0% { transform:translateX(0); } 100% { transform:translateX(-50%); } }
 @keyframes carousel { 0% { transform:translateX(0); } 100% { transform:translateX(-50%); } }
 @keyframes pulse    { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.6; transform:scale(.8); } }
-@keyframes shimmer  { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+@keyframes shimmer  { 0% { background-position:-800px 0; } 100% { background-position:800px 0; } }
+@keyframes imgFadeIn { from { opacity:0; } to { opacity:1; } }
+
+/* Image loading shimmer skeleton */
+.img-wrap { position:relative; background:${C.creamDark}; overflow:hidden; }
+.img-wrap::before {
+  content:'';
+  position:absolute; inset:0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.45) 50%, transparent 100%);
+  background-size:800px 100%;
+  animation: shimmer 1.6s infinite;
+  z-index:1;
+}
+.img-wrap.loaded::before { display:none; }
+.img-wrap img { opacity:0; transition:opacity .5s ease; position:relative; z-index:2; }
+.img-wrap.loaded img { opacity:1; animation: imgFadeIn .5s ease; }
+.img-wrap .img-err { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.5rem; color:${C.muted}; font-size:12px; z-index:2; background:${C.creamDark}; }
 
 .reveal { opacity:0; transform:translateY(28px); transition: opacity .7s cubic-bezier(.22,1,.36,1), transform .7s cubic-bezier(.22,1,.36,1); }
 .reveal.visible { opacity:1 !important; transform:translateY(0) !important; }
@@ -65,9 +77,102 @@ body { font-family: 'DM Sans', sans-serif; color: ${C.text}; background: ${C.whi
 .foot-link:hover { color:${C.goldBright}; }
 .qlink:hover { color:${C.goldBright}; background:rgba(255,255,255,.04); padding-left:1.25rem; }
 .qlink:hover .qa { opacity:.9; transform:translateX(4px); }
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr !important; }
+  .hero-quick { display:none !important; }
+  .about-grid { grid-template-columns: 1fr !important; gap:3rem !important; }
+  .about-visual { height:340px !important; }
+  .prog-grid { grid-template-columns: 1fr 1fr !important; }
+  .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+  .news-grid { grid-template-columns: 1fr !important; }
+  .events-grid { grid-template-columns: 1fr 1fr !important; }
+  .why-grid { grid-template-columns: 1fr 1fr !important; }
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap:2rem !important; }
+  .cta-inner { flex-direction:column !important; gap:2rem !important; }
+  .nav-links { display:none !important; }
+  .mobile-menu-btn { display:flex !important; }
+  .topbar-links { display:none !important; }
+}
+
+@media (max-width: 768px) {
+  section { padding: 4rem 0 !important; }
+  .prog-grid { grid-template-columns: 1fr !important; }
+  .events-grid { grid-template-columns: 1fr !important; }
+  .why-grid { grid-template-columns: 1fr !important; }
+  .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+  .hero-stat-row { gap:1.5rem !important; }
+  .about-visual { height:280px !important; }
+  .footer-grid { grid-template-columns: 1fr !important; }
+  .footer-bottom { flex-direction:column !important; text-align:center !important; }
+  .portals-inner { flex-direction:column !important; align-items:stretch !important; }
+  .portal-card { min-width:unset !important; }
+  .section-header { flex-direction:column !important; align-items:flex-start !important; }
+  .news-featured { min-height:300px !important; }
+  .hero-h1 { font-size:2.8rem !important; }
+  .nav-btn-row { gap:6px !important; }
+  .nav-btn-row .apply-btn { display:none !important; }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr 1fr !important; }
+  .hero-stat-row { flex-wrap:wrap !important; }
+  .hero-h1 { font-size:2.2rem !important; }
+  .hero-btns { flex-direction:column !important; }
+  .hero-btns a { width:100%; justify-content:center !important; }
+  .about-visual { height:220px !important; }
+  .about-visual .est-badge { display:none !important; }
+  .footer-legal { flex-direction:column !important; align-items:center !important; }
+}
+
+/* Mobile nav */
+.mobile-menu-btn { display:none; background:none; border:1.5px solid ${C.border}; border-radius:8px; padding:7px 10px; cursor:pointer; flex-direction:column; gap:4px; align-items:center; justify-content:center; }
+.mobile-menu-btn span { display:block; width:18px; height:1.5px; background:${C.navy}; border-radius:1px; transition:all .2s; }
+.mobile-nav { display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border-bottom:1px solid ${C.border}; box-shadow:0 12px 40px rgba(12,35,64,.12); z-index:300; padding:1rem 2rem; flex-direction:column; gap:4px; }
+.mobile-nav.open { display:flex; }
+.mobile-nav a { font-size:14px; font-weight:500; color:${C.text}; text-decoration:none; padding:10px 0; border-bottom:1px solid ${C.border}; }
+.mobile-nav a:last-child { border-bottom:none; }
 `;
 
-// ── Tiny helpers ──────────────────────────────────────────────────────────────
+// ── Smart Image Component ─────────────────────────────────────────────────────
+const Img = ({ src, alt, style = {}, className = "", objectPosition = "center" }) => {
+  const [status, setStatus] = useState("loading"); // loading | loaded | error
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    setStatus("loading");
+    if (!src) { setStatus("error"); return; }
+    const img = new window.Image();
+    img.onload = () => setStatus("loaded");
+    img.onerror = () => setStatus("error");
+    img.src = src;
+    // If cached/instant
+    if (img.complete) setStatus("loaded");
+  }, [src]);
+
+  return (
+    <div className={`img-wrap ${status === "loaded" ? "loaded" : ""} ${className}`} style={style}>
+      {status === "error" ? (
+        <div className="img-err">
+          <span style={{ fontSize: 28, opacity: .35 }}>🏫</span>
+          <span style={{ fontSize: 11, opacity: .5 }}>{alt || "Image"}</span>
+        </div>
+      ) : (
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition, display: "block" }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const useReveal = () => {
   useEffect(() => {
     const els = document.querySelectorAll(".reveal");
@@ -96,8 +201,8 @@ const useCounter = (end, duration = 1800) => {
   return { val, ref };
 };
 
-// ── Logo (actual URL) ─────────────────────────────────────────────────────────
 const LOGO_URL = "/assets/logo.jpeg";
+
 // ══════════════════════════════════════════════════════════════════════════════
 // TOPBAR
 // ══════════════════════════════════════════════════════════════════════════════
@@ -105,19 +210,21 @@ const Topbar = () => (
   <div style={{ background: C.navy, color: "rgba(255,255,255,.65)", fontSize: 12, padding: "7px 0", letterSpacing: ".025em" }}>
     <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
       <div style={{ display: "flex", gap: "1.5rem" }}>
-        <span>📞 +233 30 000 0000</span>
-        <span>✉ info@topridgeschool.edu.gh</span>
+        <span>📞 +233 271 591 079</span>
+        <span className="topbar-links" style={{ display: "flex" }}>✉ topridgeschool@yahoo.com</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-        {["Admissions","Alumni","Contact"].map((l, i) => (
-          <span key={l} style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-            {i > 0 && <span style={{ width: 1, height: 12, background: "rgba(255,255,255,.18)", display: "inline-block" }} />}
-            <a href={`/${l.toLowerCase()}`} style={{ color: "rgba(255,255,255,.65)", textDecoration: "none", transition: "color .2s" }}
-              onMouseEnter={e => e.target.style.color = C.goldBright}
-              onMouseLeave={e => e.target.style.color = "rgba(255,255,255,.65)"}
-            >{l}</a>
-          </span>
-        ))}
+        <div className="topbar-links" style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+          {["Admissions","Alumni","Contact"].map((l, i) => (
+            <span key={l} style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+              {i > 0 && <span style={{ width: 1, height: 12, background: "rgba(255,255,255,.18)", display: "inline-block" }} />}
+              <a href={`/${l.toLowerCase()}`} style={{ color: "rgba(255,255,255,.65)", textDecoration: "none", transition: "color .2s" }}
+                onMouseEnter={e => e.target.style.color = C.goldBright}
+                onMouseLeave={e => e.target.style.color = "rgba(255,255,255,.65)"}
+              >{l}</a>
+            </span>
+          ))}
+        </div>
         <span style={{ background: C.gold, color: C.navy, fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", padding: "2px 9px", borderRadius: 99 }}>
           2026 Intake Open
         </span>
@@ -150,6 +257,7 @@ const NAV = [
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", fn);
@@ -168,24 +276,26 @@ const Navbar = () => {
   return (
     <nav style={{
       position: "sticky", top: 0, zIndex: 100,
-      background: scrolled ? "rgba(255,255,255,.96)" : "rgba(255,255,255,.96)",
+      background: "rgba(255,255,255,.96)",
       backdropFilter: "blur(14px)",
       borderBottom: `1px solid ${C.border}`,
       boxShadow: scrolled ? "0 2px 32px rgba(12,35,64,.1)" : "none",
       transition: "box-shadow .3s",
     }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 70 }}>
+      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 70, position: "relative" }}>
         {/* Logo */}
-        <a href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
-          <img src={LOGO_URL} alt="Top Ridge School" style={{ width: 48, height: 48, objectFit: "contain", borderRadius: 6 }} />
+        <a href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", flexShrink: 0 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: C.creamDark }}>
+            <Img src={LOGO_URL} alt="Top Ridge School" style={{ width: "100%", height: "100%" }} />
+          </div>
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 17, fontWeight: 700, color: C.navy, lineHeight: 1.1 }}>Top Ridge School</div>
             <div style={{ fontSize: 9.5, color: C.gold, letterSpacing: ".16em", fontWeight: 600, textTransform: "uppercase", marginTop: 2 }}>Excellence · Character · Purpose</div>
           </div>
         </a>
 
-        {/* Links */}
-        <ul style={{ display: "flex", alignItems: "center", gap: 2, listStyle: "none" }}>
+        {/* Desktop Links */}
+        <ul className="nav-links" style={{ display: "flex", alignItems: "center", gap: 2, listStyle: "none" }}>
           {NAV.map(n => (
             <li key={n.label} className={n.drop ? "has-drop" : ""} style={{ position: "relative" }}>
               <a href={n.href} className="nav-link">{n.label}{n.drop ? " ▾" : ""}</a>
@@ -203,8 +313,8 @@ const Navbar = () => {
           ))}
         </ul>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <a href="/login" style={btnStyle("ghost")}
+        <div className="nav-btn-row" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <a href="/login" className="apply-btn" style={btnStyle("ghost")}
             onMouseEnter={e => { e.currentTarget.style.borderColor = C.navy; e.currentTarget.style.background = "rgba(12,35,64,.04)"; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = "transparent"; }}
           >Portal Login</a>
@@ -212,6 +322,18 @@ const Navbar = () => {
             onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 8px 24px rgba(184,134,42,.4)`; }}
             onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
           >Apply Now</a>
+          {/* Hamburger */}
+          <button className="mobile-menu-btn" onClick={() => setMobileOpen(v => !v)} aria-label="Menu">
+            <span style={{ transform: mobileOpen ? "rotate(45deg) translate(4px,4px)" : "" }} />
+            <span style={{ opacity: mobileOpen ? 0 : 1 }} />
+            <span style={{ transform: mobileOpen ? "rotate(-45deg) translate(4px,-4px)" : "" }} />
+          </button>
+        </div>
+
+        {/* Mobile Nav */}
+        <div className={`mobile-nav ${mobileOpen ? "open" : ""}`}>
+          {NAV.map(n => <a key={n.label} href={n.href} onClick={() => setMobileOpen(false)}>{n.label}</a>)}
+          <a href="/login" onClick={() => setMobileOpen(false)}>Portal Login</a>
         </div>
       </div>
     </nav>
@@ -221,11 +343,7 @@ const Navbar = () => {
 // ══════════════════════════════════════════════════════════════════════════════
 // HERO
 // ══════════════════════════════════════════════════════════════════════════════
-const SLIDES = [
-  "/assets/hero1.png",
-  "/assets/hero2.png",
-  "/assets/hero3.png",
-];
+const SLIDES = ["/assets/hero1.png","/assets/hero2.png","/assets/hero3.png"];
 const QUICK = [
   { icon: "🎓", label: "Student Portal — Results & Fees", href: "/portal/student" },
   { icon: "📋", label: "Teacher Portal — Marks & Attendance", href: "/portal/teacher" },
@@ -234,8 +352,23 @@ const QUICK = [
   { icon: "🏆", label: "2025 Examination Results", href: "/results-2025" },
 ];
 
+// Pre-load hero images in order
+const useHeroPreload = (slides) => {
+  const [loaded, setLoaded] = useState(new Set());
+  useEffect(() => {
+    slides.forEach((src, i) => {
+      const img = new window.Image();
+      img.onload = () => setLoaded(prev => new Set([...prev, i]));
+      img.src = src;
+    });
+  }, []);
+  return loaded;
+};
+
 const Hero = () => {
   const [cur, setCur] = useState(0);
+  const loaded = useHeroPreload(SLIDES);
+
   useEffect(() => {
     const t = setInterval(() => setCur(v => (v + 1) % SLIDES.length), 5500);
     return () => clearInterval(t);
@@ -243,23 +376,34 @@ const Hero = () => {
 
   return (
     <section style={{ position: "relative", minHeight: "93vh", display: "flex", alignItems: "center", background: C.navy, overflow: "hidden" }}>
-      {/* Slides */}
+      {/* Slides — use <img> with object-fit for proper loading */}
       {SLIDES.map((s, i) => (
         <div key={i} style={{
           position: "absolute", inset: 0, zIndex: 0,
-          backgroundImage: `url(${s})`, backgroundSize: "cover", backgroundPosition: "center",
           opacity: i === cur ? 1 : 0,
           transform: i === cur ? "scale(1)" : "scale(1.05)",
           transition: "opacity 1.4s ease, transform 8s ease",
-        }} />
+          overflow: "hidden",
+        }}>
+          {/* Only render slides that are loaded or the current one */}
+          {(loaded.has(i) || i === 0) && (
+            <img
+              src={s}
+              alt=""
+              role="presentation"
+              loading={i === 0 ? "eager" : "lazy"}
+              decoding={i === 0 ? "sync" : "async"}
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }}
+            />
+          )}
+        </div>
       ))}
       {/* Overlay */}
       <div style={{ position: "absolute", inset: 0, zIndex: 1, background: "linear-gradient(115deg,rgba(12,35,64,.93) 0%,rgba(12,35,64,.7) 50%,rgba(12,35,64,.3) 100%)" }} />
-      {/* Gold side accent */}
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: `linear-gradient(to bottom,transparent,${C.goldMid},transparent)`, opacity: .7, zIndex: 2 }} />
 
       {/* Content */}
-      <div style={{ position: "relative", zIndex: 3, maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "grid", gridTemplateColumns: "1fr 420px", gap: "4rem", alignItems: "center", width: "100%" }}>
+      <div className="hero-grid" style={{ position: "relative", zIndex: 3, maxWidth: 1240, margin: "0 auto", padding: "6rem 2rem 4rem", display: "grid", gridTemplateColumns: "1fr 420px", gap: "4rem", alignItems: "center", width: "100%" }}>
         {/* Text */}
         <div style={{ color: "#fff", animation: "fadeUp .9s ease both" }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "rgba(184,134,42,.18)", border: `1px solid rgba(236,195,74,.35)`, borderRadius: 99, padding: "7px 18px", fontSize: 11, letterSpacing: ".14em", fontWeight: 600, color: C.goldBright, textTransform: "uppercase", marginBottom: "1.75rem" }}>
@@ -267,7 +411,7 @@ const Hero = () => {
             Accra, Ghana — Est. 2005
           </div>
 
-          <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(3rem,5.5vw,5rem)", fontWeight: 700, lineHeight: 1.04, marginBottom: "1rem", letterSpacing: "-.01em" }}>
+          <h1 className="hero-h1" style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(2.5rem,5.5vw,5rem)", fontWeight: 700, lineHeight: 1.04, marginBottom: "1rem", letterSpacing: "-.01em" }}>
             Raising<br /><em style={{ fontStyle: "italic", color: C.goldBright, fontWeight: 500 }}>Leaders</em> of<br />Tomorrow
           </h1>
 
@@ -277,7 +421,7 @@ const Hero = () => {
             Top Ridge School delivers world-class education from Nursery through JHS, nurturing every child's academic excellence, character, and God-given purpose in the heart of Accra.
           </p>
 
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "3.5rem" }}>
+          <div className="hero-btns" style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "3.5rem" }}>
             {[
               { label: "Apply for Admission", style: { background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, color: "#fff", boxShadow: `0 8px 24px rgba(184,134,42,.4)` }},
               { label: "Explore the School", style: { background: "rgba(255,255,255,.1)", color: "#fff", border: "1.5px solid rgba(255,255,255,.25)" }},
@@ -289,8 +433,7 @@ const Hero = () => {
             ))}
           </div>
 
-          {/* Stats */}
-          <div style={{ display: "flex", gap: "2.5rem", paddingTop: "2rem", borderTop: "1px solid rgba(255,255,255,.12)" }}>
+          <div className="hero-stat-row" style={{ display: "flex", gap: "2.5rem", paddingTop: "2rem", borderTop: "1px solid rgba(255,255,255,.12)" }}>
             {[{ n: "800+", l: "Students" }, { n: "60+", l: "Educators" }, { n: "98%", l: "BECE Pass Rate" }].map(s => (
               <div key={s.l}>
                 <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "2.2rem", fontWeight: 700, color: "#fff", lineHeight: 1 }}>{s.n}</div>
@@ -301,7 +444,7 @@ const Hero = () => {
         </div>
 
         {/* Quick Access Card */}
-        <div style={{ background: "rgba(255,255,255,.06)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 20, overflow: "hidden", animation: "fadeUp .9s .2s ease both", opacity: 0, animationFillMode: "forwards" }}>
+        <div className="hero-quick" style={{ background: "rgba(255,255,255,.06)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 20, overflow: "hidden", animation: "fadeUp .9s .2s ease both", opacity: 0, animationFillMode: "forwards" }}>
           <div style={{ background: "rgba(255,255,255,.06)", padding: "1.25rem 1.75rem", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "1.15rem", fontWeight: 600, color: "#fff" }}>Quick Access</span>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.goldBright, background: "rgba(240,192,64,.15)", border: `1px solid rgba(240,192,64,.25)`, padding: "3px 10px", borderRadius: 99 }}>Live</span>
@@ -325,7 +468,6 @@ const Hero = () => {
         ))}
       </div>
 
-      {/* Scroll hint */}
       <div style={{ position: "absolute", bottom: "2.5rem", right: "3rem", zIndex: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
         <span style={{ color: "rgba(255,255,255,.35)", fontSize: 10, letterSpacing: ".15em", textTransform: "uppercase" }}>Scroll</span>
         <div style={{ width: 1.5, height: 44, background: "linear-gradient(to bottom,rgba(255,255,255,.3),transparent)" }} />
@@ -344,8 +486,7 @@ const Ticker = () => (
     <div style={{ display: "flex", animation: "ticker 35s linear infinite", width: "max-content" }}>
       {[...TICKS, ...TICKS].map((t, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0 2rem", fontSize: 12.5, fontWeight: 600, color: C.navy, letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-          {t}
-          <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.navy, opacity: .35 }} />
+          {t}<span style={{ width: 4, height: 4, borderRadius: "50%", background: C.navy, opacity: .35 }} />
         </div>
       ))}
     </div>
@@ -356,49 +497,52 @@ const Ticker = () => (
 // PORTAL STRIP
 // ══════════════════════════════════════════════════════════════════════════════
 const PORTALS = [
-  { icon: "🛡️", label: "Portal", name: "Admin Login", href: "/portal/admin", bg: "rgba(12,35,64,.08)" },
-  { icon: "📖", label: "Portal", name: "Teacher Login", href: "/portal/teacher", bg: "rgba(184,134,42,.1)" },
-  { icon: "🎓", label: "Portal", name: "Student Login", href: "/portal/student", bg: "rgba(26,92,58,.1)" },
+  { icon: "🛡️", label: "Portal", name: "Admin Login", href: "/portal/admin" },
+  { icon: "📖", label: "Portal", name: "Teacher Login", href: "/portal/teacher" },
+  { icon: "🎓", label: "Portal", name: "Student Login", href: "/portal/student" },
 ];
 
 const PortalStrip = () => (
   <div style={{ background: C.cream, borderBottom: `1px solid ${C.border}`, padding: "1.75rem 0" }}>
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "flex", justifyContent: "center", gap: "1.25rem", flexWrap: "wrap" }}>
-      {PORTALS.map(p => (
-        <a key={p.href} href={p.href} className="portal-card" style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.1rem 1.5rem", display: "flex", alignItems: "center", gap: 12, textDecoration: "none", transition: "all .25s", minWidth: 170, position: "relative", overflow: "hidden" }}>
-          <div className="portal-bar" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(to right,${C.gold},${C.goldMid})`, transform: "scaleX(0)", transformOrigin: "left", transition: "transform .3s" }} />
-          <div style={{ width: 38, height: 38, borderRadius: 9, background: p.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{p.icon}</div>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{p.label}</div>
-            <div style={{ fontSize: 14.5, fontWeight: 600, color: C.navy }}>{p.name}</div>
-          </div>
-        </a>
-      ))}
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem" }}>
+      <div className="portals-inner" style={{ display: "flex", justifyContent: "center", gap: "1.25rem", flexWrap: "wrap" }}>
+        {PORTALS.map(p => (
+          <a key={p.href} href={p.href} className="portal-card" style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.1rem 1.5rem", display: "flex", alignItems: "center", gap: 12, textDecoration: "none", transition: "all .25s", minWidth: 170, flex: "1 1 150px", maxWidth: 260, position: "relative", overflow: "hidden" }}>
+            <div className="portal-bar" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(to right,${C.gold},${C.goldMid})`, transform: "scaleX(0)", transformOrigin: "left", transition: "transform .3s" }} />
+            <div style={{ width: 38, height: 38, borderRadius: 9, background: "rgba(184,134,42,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{p.icon}</div>
+            <div>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{p.label}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 600, color: C.navy }}>{p.name}</div>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   </div>
 );
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SECTION HELPER
+// SECTION HELPERS
 // ══════════════════════════════════════════════════════════════════════════════
-const SLabel = ({ children }) => (
-  <div style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, fontWeight: 700, letterSpacing: ".16em", textTransform: "uppercase", color: C.gold, marginBottom: "1rem" }}>
-    <span style={{ width: 28, height: 2, background: C.gold, borderRadius: 1 }} />{children}
+const SLabel = ({ children, light }) => (
+  <div style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, fontWeight: 700, letterSpacing: ".16em", textTransform: "uppercase", color: light ? C.goldBright : C.gold, marginBottom: "1rem" }}>
+    <span style={{ width: 28, height: 2, background: light ? C.goldBright : C.gold, borderRadius: 1 }} />{children}
+    {light && <span style={{ width: 28, height: 2, background: C.goldBright, borderRadius: 1 }} />}
   </div>
 );
 const STitle = ({ children, light }) => (
-  <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(2rem,3.5vw,3rem)", fontWeight: 700, color: light ? C.white : C.navy, lineHeight: 1.1, letterSpacing: "-.01em" }}>{children}</h2>
+  <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(1.8rem,3.5vw,3rem)", fontWeight: 700, color: light ? C.white : C.navy, lineHeight: 1.1, letterSpacing: "-.01em" }}>{children}</h2>
 );
-const Btn = ({ children, href, variant = "navy", ...rest }) => {
+const Btn = ({ children, href, variant = "navy", style: extraStyle = {} }) => {
   const styles = {
-    navy:  { background: C.navy, color: "#fff" },
-    gold:  { background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, color: "#fff" },
-    ghost: { background: "transparent", border: `1.5px solid ${C.border}`, color: C.navy },
-    white: { background: C.white, color: C.green, fontWeight: 700 },
+    navy:     { background: C.navy, color: "#fff" },
+    gold:     { background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, color: "#fff" },
+    ghost:    { background: "transparent", border: `1.5px solid ${C.border}`, color: C.navy },
+    white:    { background: C.white, color: C.green, fontWeight: 700 },
     outlineW: { background: "transparent", border: "1.5px solid rgba(255,255,255,.35)", color: "#fff" },
   };
   return (
-    <a href={href} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 26px", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none", transition: "all .22s", fontFamily: "'DM Sans',sans-serif", ...styles[variant], ...rest.style }}
+    <a href={href} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 26px", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none", transition: "all .22s", fontFamily: "'DM Sans',sans-serif", ...styles[variant], ...extraStyle }}
       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.opacity = ".9"; }}
       onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.opacity = "1"; }}
     >{children}</a>
@@ -412,26 +556,24 @@ const About = () => {
   useReveal();
   return (
     <section style={{ background: C.cream, padding: "6rem 0" }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
+      <div className="about-grid" style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
         {/* Visual */}
-        <div className="reveal" style={{ position: "relative", height: 500 }}>
+        <div className="reveal about-visual" style={{ position: "relative", height: 500 }}>
           <div style={{ position: "absolute", top: 0, left: 0, width: "74%", height: "84%", borderRadius: 20, overflow: "hidden", boxShadow: "0 20px 60px rgba(12,35,64,.2)" }}>
-            <img src="/assets/hero3.png" alt="Top Ridge Students" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(12,35,64,.3), transparent)" }} />
+            <Img src="/assets/hero3.png" alt="Top Ridge Students" style={{ width: "100%", height: "100%" }} objectPosition="center top" />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(12,35,64,.3), transparent)", pointerEvents: "none" }} />
           </div>
           <div style={{ position: "absolute", bottom: 0, right: 0, width: "52%", height: "52%", borderRadius: 20, overflow: "hidden", border: `4px solid ${C.cream}`, boxShadow: "0 12px 40px rgba(12,35,64,.15)" }}>
-            <img src="/assets/hero1.png" alt="Nursery Learning" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <div style={{ position: "absolute", inset: 0, background: "rgba(12,35,64,.1)" }} />
+            <Img src="/assets/hero1.png" alt="Nursery Learning" style={{ width: "100%", height: "100%" }} />
+            <div style={{ position: "absolute", inset: 0, background: "rgba(12,35,64,.1)", pointerEvents: "none" }} />
           </div>
           <div style={{ position: "absolute", bottom: -14, right: "26%", transform: "translateX(50%)", background: C.white, border: `1px solid ${C.border}`, borderRadius: 99, padding: "7px 16px", fontSize: 11.5, fontWeight: 600, color: C.navy, whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,.08)", zIndex: 10 }}>
             📍 North Kwashieman, Accra
           </div>
-          {/* Est. badge */}
-          <div style={{ position: "absolute", top: "1.5rem", left: "calc(74% - 80px)", background: C.navy, borderRadius: 12, padding: "14px 18px", textAlign: "center", boxShadow: "0 8px 28px rgba(12,35,64,.3)", zIndex: 10 }}>
+          <div className="est-badge" style={{ position: "absolute", top: "1.5rem", left: "calc(74% - 80px)", background: C.navy, borderRadius: 12, padding: "14px 18px", textAlign: "center", boxShadow: "0 8px 28px rgba(12,35,64,.3)", zIndex: 10 }}>
             <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "1.9rem", fontWeight: 700, color: C.goldBright, lineHeight: 1 }}>2005</div>
             <div style={{ fontSize: 9, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginTop: 2 }}>Est.</div>
           </div>
-          {/* Gold corner accent */}
           <div style={{ position: "absolute", top: -18, left: -18, width: 100, height: 100, borderRadius: 4, background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, opacity: .12, zIndex: -1 }} />
         </div>
 
@@ -478,21 +620,21 @@ const PROGS = [
 
 const Programmes = () => (
   <section style={{ background: C.white, padding: "6rem 0" }}>
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", flexWrap: "wrap", gap: "1rem" }}>
-        <div className="reveal">
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem" }}>
+      <div className="section-header reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", gap: "1rem" }}>
+        <div>
           <SLabel>Academic Programmes</SLabel>
           <STitle>Education at <em style={{ fontStyle: "italic", color: C.gold, fontWeight: 500 }}>Every Stage</em></STitle>
           <p style={{ fontSize: "1rem", color: C.muted, lineHeight: 1.75, marginTop: "0.75rem", maxWidth: 500 }}>From first steps to junior high — a seamless, nurturing academic journey.</p>
         </div>
         <Btn href="/academics" variant="ghost" style={{ flexShrink: 0 }}>View All Programmes</Btn>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
+      <div className="prog-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
         {PROGS.map((p, i) => (
           <a key={p.href} href={p.href} className={`prog-card reveal ${i > 0 ? `d${i+1}` : ""}`} style={{ borderRadius: 20, overflow: "hidden", border: `1px solid ${C.border}`, textDecoration: "none", background: C.white, display: "block", position: "relative", transition: "all .35s" }}>
             <div style={{ height: 190, position: "relative", overflow: "hidden" }}>
-              <img src={p.image} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", transition: "transform .5s ease" }} />
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.5),transparent)" }} />
+              <Img src={p.image} alt={p.name} style={{ width: "100%", height: "100%" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.5),transparent)", pointerEvents: "none" }} />
               <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(12,35,64,.7)", backdropFilter: "blur(8px)", borderRadius: 99, padding: "4px 12px", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.goldBright }}>{p.level}</div>
             </div>
             <div style={{ padding: "1.6rem", paddingBottom: "3.5rem" }}>
@@ -507,6 +649,7 @@ const Programmes = () => (
     </div>
   </section>
 );
+
 // ══════════════════════════════════════════════════════════════════════════════
 // STATS
 // ══════════════════════════════════════════════════════════════════════════════
@@ -515,7 +658,7 @@ const StatItem = ({ end, suffix, label, icon, delay }) => {
   return (
     <div ref={ref} className={`reveal ${delay}`} style={{ textAlign: "center", padding: "2.25rem 1.5rem", borderRight: `1px solid rgba(255,255,255,.08)`, position: "relative" }}>
       <div style={{ fontSize: "1.5rem", marginBottom: 12, opacity: .6 }}>{icon}</div>
-      <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "3.2rem", fontWeight: 700, color: "#fff", lineHeight: 1, letterSpacing: "-.02em" }}>
+      <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(2.2rem,4vw,3.2rem)", fontWeight: 700, color: "#fff", lineHeight: 1, letterSpacing: "-.02em" }}>
         {val}{suffix}
       </div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,.45)", marginTop: 8, letterSpacing: ".06em", textTransform: "uppercase" }}>{label}</div>
@@ -526,8 +669,8 @@ const StatItem = ({ end, suffix, label, icon, delay }) => {
 const Stats = () => (
   <div style={{ background: C.navy, padding: "4.5rem 0", position: "relative", overflow: "hidden" }}>
     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(to right,transparent,${C.goldMid},${C.gold},${C.goldMid},transparent)` }} />
-    <div style={{ position: "absolute", right: "-2%", top: "50%", transform: "translateY(-50%)", fontFamily: "'Cormorant Garamond',serif", fontSize: "10rem", fontWeight: 700, fontStyle: "italic", color: "rgba(255,255,255,.025)", letterSpacing: "-.05em", pointerEvents: "none", whiteSpace: "nowrap" }}>EXCELLENCE</div>
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "2rem", position: "relative" }}>
+    <div style={{ position: "absolute", right: "-2%", top: "50%", transform: "translateY(-50%)", fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(4rem,10vw,10rem)", fontWeight: 700, fontStyle: "italic", color: "rgba(255,255,255,.025)", letterSpacing: "-.05em", pointerEvents: "none", whiteSpace: "nowrap" }}>EXCELLENCE</div>
+    <div className="stats-grid" style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", position: "relative" }}>
       <StatItem end={800} suffix="+" label="Enrolled Students" icon="👥" delay="d1" />
       <StatItem end={98} suffix="%" label="BECE Pass Rate" icon="🏆" delay="d2" />
       <StatItem end={60} suffix="+" label="Qualified Staff" icon="👩‍🏫" delay="d3" />
@@ -548,19 +691,21 @@ const NEWS_ITEMS = [
 
 const News = () => (
   <section style={{ background: C.cream, padding: "6rem 0" }}>
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", flexWrap: "wrap", gap: "1rem" }}>
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem" }}>
+      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", gap: "1rem" }}>
         <div className="reveal"><SLabel>Latest News</SLabel><STitle>What's Happening at <em style={{ fontStyle: "italic", color: C.gold, fontWeight: 500 }}>Top Ridge</em></STitle></div>
         <Btn href="/news" variant="ghost">All News</Btn>
       </div>
-      <div className="reveal" style={{ display: "grid", gridTemplateColumns: "5fr 3fr", gap: "1.75rem" }}>
+      <div className="news-grid reveal" style={{ display: "grid", gridTemplateColumns: "5fr 3fr", gap: "1.75rem" }}>
         {/* Featured */}
-        <a href="/news/sports-day" className="news-featured" style={{ position: "relative", borderRadius: 20, overflow: "hidden", minHeight: 460, display: "flex", alignItems: "flex-end", textDecoration: "none", background: `linear-gradient(135deg,${C.navy},${C.green})` }}>
-          <div className="news-bg" style={{ position: "absolute", inset: 0, backgroundImage:"url(/assets/hero6.png)", backgroundSize: "cover", backgroundPosition: "center", transition: "transform .7s" }} />
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.95) 0%,rgba(12,35,64,.35) 55%,rgba(12,35,64,.1) 100%)" }} />
+        <a href="/news/sports-day" className="news-featured" style={{ position: "relative", borderRadius: 20, overflow: "hidden", minHeight: 460, display: "flex", alignItems: "flex-end", textDecoration: "none" }}>
+          <div className="news-bg" style={{ position: "absolute", inset: 0, transition: "transform .7s", overflow: "hidden" }}>
+            <Img src="/assets/hero7.png" alt="Sports Day" style={{ width: "100%", height: "100%" }} />
+          </div>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(12,35,64,.95) 0%,rgba(12,35,64,.35) 55%,rgba(12,35,64,.1) 100%)", pointerEvents: "none" }} />
           <div style={{ position: "relative", zIndex: 1, padding: "2.5rem", color: "#fff" }}>
             <span style={{ display: "inline-block", background: C.gold, color: C.navy, fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", padding: "4px 12px", borderRadius: 99, marginBottom: 14 }}>Sports</span>
-            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "1.7rem", fontWeight: 600, lineHeight: 1.2, marginBottom: 10 }}>Top Ridge Wins District Inter-Schools Athletics Championship 2025</div>
+            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(1.3rem,2.5vw,1.7rem)", fontWeight: 600, lineHeight: 1.2, marginBottom: 10 }}>Top Ridge Wins District Inter-Schools Athletics Championship 2025</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 16, height: 1, background: "rgba(255,255,255,.3)", display: "inline-block" }} />March 15, 2025</div>
           </div>
         </a>
@@ -591,12 +736,12 @@ const EVENTS = [
 
 const Events = () => (
   <section style={{ background: C.white, padding: "6rem 0" }}>
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", flexWrap: "wrap", gap: "1rem" }}>
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem" }}>
+      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", gap: "1rem" }}>
         <div className="reveal"><SLabel>Upcoming Events</SLabel><STitle>Mark Your <em style={{ fontStyle: "italic", color: C.gold, fontWeight: 500 }}>Calendar</em></STitle></div>
         <Btn href="/events" variant="ghost">View All Events</Btn>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
+      <div className="events-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
         {EVENTS.map((e, i) => (
           <div key={e.name} className={`event-card reveal ${i > 0 ? `d${i+1}` : ""}`} style={{ borderRadius: 20, border: `1px solid ${C.border}`, overflow: "hidden", transition: "all .25s" }}>
             <div style={{ background: C.navy, padding: "1.4rem 1.6rem", display: "flex", alignItems: "center", gap: "1.25rem", position: "relative", overflow: "hidden" }}>
@@ -640,20 +785,18 @@ const TESTIS = [
 const Testimonials = () => (
   <section style={{ background: C.navy, padding: "6rem 0", overflow: "hidden", position: "relative" }}>
     <div style={{ position: "absolute", top: -100, left: -100, width: 400, height: 400, borderRadius: "50%", background: "rgba(184,134,42,.05)", pointerEvents: "none" }} />
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", marginBottom: "3.5rem" }}>
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem", marginBottom: "3.5rem" }}>
       <div className="reveal" style={{ textAlign: "center" }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, fontWeight: 700, letterSpacing: ".16em", textTransform: "uppercase", color: C.goldBright, marginBottom: "1rem" }}>
-          <span style={{ width: 28, height: 2, background: C.goldBright, borderRadius: 1 }} />Student Voices<span style={{ width: 28, height: 2, background: C.goldBright, borderRadius: 1 }} />
-        </div>
+        <SLabel light>Student Voices</SLabel>
         <STitle light>What Our <em style={{ fontStyle: "italic", color: C.goldBright, fontWeight: 500 }}>Community Says</em></STitle>
       </div>
     </div>
     <div style={{ overflow: "hidden" }}>
       <div className="testi-track" style={{ display: "flex", gap: "1.5rem", animation: "carousel 45s linear infinite", width: "max-content" }}>
         {[...TESTIS, ...TESTIS].map((t, i) => (
-          <div key={i} style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, padding: "2rem", minWidth: 330, flexShrink: 0, position: "relative" }}>
+          <div key={i} style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, padding: "2rem", minWidth: 300, maxWidth: 340, flexShrink: 0, position: "relative" }}>
             <div style={{ position: "absolute", top: -10, left: "1.5rem", fontFamily: "'Cormorant Garamond',serif", fontSize: "6rem", color: "rgba(240,192,64,.15)", lineHeight: 1 }}>"</div>
-            <p style={{ fontFamily: "'Libre Baskerville',serif", fontSize: ".95rem", color: "rgba(255,255,255,.8)", lineHeight: 1.75, marginBottom: "1.5rem", fontStyle: "italic", paddingTop: "0.5rem" }}>{t.q}</p>
+            <p style={{ fontFamily: "'Libre Baskerville',serif", fontSize: ".9rem", color: "rgba(255,255,255,.8)", lineHeight: 1.75, marginBottom: "1.5rem", fontStyle: "italic", paddingTop: "0.5rem" }}>{t.q}</p>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 42, height: 42, borderRadius: "50%", background: `linear-gradient(135deg,${C.gold},${C.goldMid})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.navy, flexShrink: 0 }}>{t.init}</div>
               <div>
@@ -682,13 +825,13 @@ const WHY = [
 
 const WhyUs = () => (
   <section style={{ background: C.cream, padding: "6rem 0" }}>
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem" }}>
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem" }}>
       <div className="reveal" style={{ textAlign: "center", marginBottom: "4rem" }}>
         <SLabel>Why Join Us</SLabel>
         <STitle>The Top Ridge <em style={{ fontStyle: "italic", color: C.gold, fontWeight: 500 }}>Difference</em></STitle>
         <p style={{ fontSize: "1rem", color: C.muted, lineHeight: 1.75, marginTop: "0.75rem", maxWidth: 540, margin: "0.75rem auto 0" }}>We go beyond the classroom to develop the whole child — academically, spiritually, and socially.</p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
+      <div className="why-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem" }}>
         {WHY.map((w, i) => (
           <div key={w.title} className={`why-card reveal ${["","d1","d2","d1","d2","d3"][i]}`} style={{ background: C.white, borderRadius: 20, padding: "2.25rem", border: `1px solid ${C.border}`, transition: "all .3s", position: "relative", overflow: "hidden" }}>
             <div className="why-bar" style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(to right,${C.gold},${C.goldMid})`, transform: "scaleX(0)", transformOrigin: "left", transition: "transform .4s" }} />
@@ -709,19 +852,21 @@ const AdmissionsCTA = () => (
   <section style={{ background: C.green, padding: "5.5rem 0", position: "relative", overflow: "hidden" }}>
     <div style={{ position: "absolute", top: -80, right: -80, width: 380, height: 380, borderRadius: "50%", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", pointerEvents: "none" }} />
     <div style={{ position: "absolute", bottom: -100, left: "8%", width: 280, height: 280, borderRadius: "50%", background: "rgba(184,134,42,.06)", pointerEvents: "none" }} />
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2.5rem", position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "2.5rem", flexWrap: "wrap" }}>
-      <div className="reveal">
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, fontWeight: 700, letterSpacing: ".16em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: "1rem" }}>
-          <span style={{ width: 28, height: 2, background: "rgba(255,255,255,.35)", borderRadius: 1 }} />Admissions 2026
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 2rem", position: "relative", zIndex: 1 }}>
+      <div className="cta-inner reveal" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "2.5rem", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, fontWeight: 700, letterSpacing: ".16em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: "1rem" }}>
+            <span style={{ width: 28, height: 2, background: "rgba(255,255,255,.35)", borderRadius: 1 }} />Admissions 2026
+          </div>
+          <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(1.8rem,3.2vw,2.8rem)", fontWeight: 700, color: "#fff", lineHeight: 1.12, letterSpacing: "-.01em", marginTop: "0.5rem" }}>
+            Give Your Child the <em style={{ fontStyle: "italic", color: C.goldBright, fontWeight: 400 }}>Best Start</em>
+          </h2>
+          <p style={{ fontSize: "1rem", color: "rgba(255,255,255,.65)", marginTop: "0.75rem", maxWidth: 480, lineHeight: 1.7 }}>Applications are open for Nursery through JHS 1. Join a community of learners, thinkers, and future leaders at Top Ridge School.</p>
         </div>
-        <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: "clamp(2rem,3.2vw,2.8rem)", fontWeight: 700, color: "#fff", lineHeight: 1.12, letterSpacing: "-.01em", marginTop: "0.5rem" }}>
-          Give Your Child the <em style={{ fontStyle: "italic", color: C.goldBright, fontWeight: 400 }}>Best Start</em>
-        </h2>
-        <p style={{ fontSize: "1rem", color: "rgba(255,255,255,.65)", marginTop: "0.75rem", maxWidth: 480, lineHeight: 1.7 }}>Applications are open for Nursery through JHS 1. Join a community of learners, thinkers, and future leaders at Top Ridge School.</p>
-      </div>
-      <div className="reveal d2" style={{ display: "flex", gap: "1rem", flexShrink: 0, flexWrap: "wrap" }}>
-        <Btn href="/admissions/apply" variant="white">Apply Online Now</Btn>
-        <Btn href="/admissions" variant="outlineW">Admission Info</Btn>
+        <div className="reveal d2" style={{ display: "flex", gap: "1rem", flexShrink: 0, flexWrap: "wrap" }}>
+          <Btn href="/admissions/apply" variant="white">Apply Online Now</Btn>
+          <Btn href="/admissions" variant="outlineW">Admission Info</Btn>
+        </div>
       </div>
     </div>
   </section>
@@ -733,12 +878,14 @@ const AdmissionsCTA = () => (
 const Footer = () => (
   <footer style={{ background: C.navy, color: "rgba(255,255,255,.65)", paddingTop: 0 }}>
     <div style={{ height: 3, background: `linear-gradient(to right,transparent,${C.goldMid},${C.gold},${C.goldMid},transparent)` }} />
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "4.5rem 2.5rem 0" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr 1fr 1.1fr", gap: "3.5rem", paddingBottom: "3.5rem", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "4.5rem 2rem 0" }}>
+      <div className="footer-grid" style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr 1fr 1.1fr", gap: "3.5rem", paddingBottom: "3.5rem", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
         {/* Brand */}
         <div>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", marginBottom: "1.25rem" }}>
-            <img src={LOGO_URL} alt="Top Ridge School" style={{ width: 42, height: 42, objectFit: "contain", borderRadius: 6 }} />
+            <div style={{ width: 42, height: 42, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "rgba(255,255,255,.1)" }}>
+              <Img src={LOGO_URL} alt="Top Ridge School" style={{ width: "100%", height: "100%" }} />
+            </div>
             <div>
               <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 17, fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>Top Ridge School</div>
               <div style={{ fontSize: 9.5, color: C.gold, letterSpacing: ".16em", fontWeight: 600, textTransform: "uppercase", marginTop: 2 }}>Excellence · Character · Purpose</div>
@@ -752,7 +899,6 @@ const Footer = () => (
           </div>
         </div>
 
-        {/* Quick Links */}
         {[
           { title: "Quick Links", links: ["About Us","Academics","Admissions","News & Events","Gallery","Achievements","Why Join Us"] },
           { title: "Programmes", links: ["Nursery / KG","Primary (B1–6)","JHS (B7–9)","Curriculum","Exam Results 2025","Student Portal","Teacher Portal"] },
@@ -767,12 +913,11 @@ const Footer = () => (
           </div>
         ))}
 
-        {/* Contact */}
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#fff", marginBottom: "1.5rem" }}>Contact</div>
           {[
             { icon: "📍", val: "North Kwashieman, Accra, Ghana" },
-            { icon: "📞", val: "+233 271591079" },
+            { icon: "📞", val: "+233 271 591 079" },
             { icon: "✉", val: "topridgeschool@yahoo.com" },
             { icon: "🕗", val: "Mon–Fri: 7:30 AM – 5:00 PM" },
           ].map(c => (
@@ -784,9 +929,9 @@ const Footer = () => (
         </div>
       </div>
 
-      <div style={{ padding: "1.5rem 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", fontSize: 12 }}>
+      <div className="footer-bottom" style={{ padding: "1.5rem 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", fontSize: 12 }}>
         <span style={{ color: "rgba(255,255,255,.3)" }}>© 2025 Top Ridge School. All rights reserved.</span>
-        <div style={{ display: "flex", gap: "1.5rem" }}>
+        <div className="footer-legal" style={{ display: "flex", gap: "1.5rem" }}>
           {["Privacy Policy","Terms of Use","Sitemap"].map(l => (
             <a key={l} href="#" style={{ color: "rgba(255,255,255,.35)", textDecoration: "none", transition: "color .2s" }}
               onMouseEnter={e => e.target.style.color = "rgba(255,255,255,.75)"}
