@@ -1,12 +1,12 @@
 import axios from "axios";
 
-const BASE_URL = "https://school-backend-bzk3.onrender.com/api";
+const BASE_URL = "https://top-ridge-school.onrender.com/api";
 
 const PUBLIC_ENDPOINTS = ["/auth/login/", "/auth/refresh/", "/auth/register/"];
 
 // ── Axios instance ─────────────────────────────────────────────
 const API = axios.create({
-  baseURL: BASE_URL,   // ← removed trailing slash
+  baseURL: BASE_URL,
   timeout: 30000,
 });
 
@@ -55,13 +55,11 @@ API.interceptors.response.use(
         window.location.href = "/login";
       }
     }
-
     return Promise.reject(error);
   }
 );
 
 // ── Wake-up ping — call this once on app load ─────────────────
-// Uses a GET-safe endpoint instead of the login endpoint
 export const wakeUpServer = () => {
   axios
     .get(`${BASE_URL}/health/`, { timeout: 60000 })
