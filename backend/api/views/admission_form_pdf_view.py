@@ -1,3 +1,16 @@
+"""
+admission_pdf_view.py
+─────────────────────
+Two-page admission PDF generator for Top Ridge School.
+
+Page 1  →  Admission details (student info, parent info, checklist)
+Page 2  →  Acceptance form (intro, parent declaration, school declaration)
+
+Usage (Django view):
+    GET /admissions/<id>/pdf/
+    Returns: application/pdf attachment
+"""
+
 from io import BytesIO
 import os
 
@@ -28,94 +41,84 @@ from apps.admissions.models import Admission
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Colour palette
+# School identity constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-NAVY        = colors.HexColor("#0f2d6b")
-BLUE        = colors.HexColor("#1e40af")
-LBLUE       = colors.HexColor("#dbeafe")
-MBLUE       = colors.HexColor("#93c5fd")
-ACCENT      = colors.HexColor("#f59e0b")
-ACCENT_DARK = colors.HexColor("#b45309")
-TEAL        = colors.HexColor("#0d9488")
-LTEAL       = colors.HexColor("#ccfbf1")
-
-GREEN       = colors.HexColor("#16a34a")
-LGREEN      = colors.HexColor("#dcfce7")
-RED         = colors.HexColor("#dc2626")
-LRED        = colors.HexColor("#fee2e2")
-ORANGE      = colors.HexColor("#ea580c")
-LORANGE     = colors.HexColor("#ffedd5")
-
-WHITE       = colors.white
-OFF_WHITE   = colors.HexColor("#f8fafc")
-GRAY_50     = colors.HexColor("#f9fafb")
-GRAY_100    = colors.HexColor("#f3f4f6")
-GRAY_200    = colors.HexColor("#e5e7eb")
-GRAY_300    = colors.HexColor("#d1d5db")
-GRAY_400    = colors.HexColor("#9ca3af")
-GRAY_600    = colors.HexColor("#4b5563")
-GRAY_800    = colors.HexColor("#1f2937")
-BLACK       = colors.HexColor("#0f172a")
+SCHOOL_NAME  = "TOP RIDGE SCHOOL"
+SCHOOL_SUB   = "Excellence in Education"
+SCHOOL_MOTTO = "PERSEVERANCE  ·  TRUTH  ·  & COURAGE"
 
 LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "images", "logo.jpeg")
 
-PW     = A4[0] - 32 * mm
+PW     = A4[0] - 32 * mm   # usable page width
 PAGE_H = A4[1]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Colour palette  (school green + gold)
+# ─────────────────────────────────────────────────────────────────────────────
+
+SCHOOL_GREEN  = colors.HexColor("#1a6b3c")   # shield green
+SCHOOL_DARK   = colors.HexColor("#0f4526")   # dark green header
+SCHOOL_LIGHT  = colors.HexColor("#e8f5ee")   # very light tint
+SCHOOL_MID    = colors.HexColor("#a8d5b8")   # mid green (subtext)
+
+GOLD          = colors.HexColor("#c9a227")   # school gold accent
+GOLD_LIGHT    = colors.HexColor("#fdf3d7")   # pale gold row tint
+GOLD_DARK     = colors.HexColor("#8a6e14")
+
+TEAL          = colors.HexColor("#0d9488")
+LTEAL         = colors.HexColor("#ccfbf1")
+
+GREEN_OK      = colors.HexColor("#16a34a")
+LGREEN        = colors.HexColor("#dcfce7")
+RED           = colors.HexColor("#dc2626")
+LRED          = colors.HexColor("#fee2e2")
+ORANGE        = colors.HexColor("#ea580c")
+LORANGE       = colors.HexColor("#ffedd5")
+
+WHITE         = colors.white
+GRAY_50       = colors.HexColor("#f9fafb")
+GRAY_100      = colors.HexColor("#f3f4f6")
+GRAY_200      = colors.HexColor("#e5e7eb")
+GRAY_300      = colors.HexColor("#d1d5db")
+GRAY_400      = colors.HexColor("#9ca3af")
+GRAY_600      = colors.HexColor("#4b5563")
+GRAY_700      = colors.HexColor("#374151")
+GRAY_800      = colors.HexColor("#1f2937")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Custom Flowables
 # ─────────────────────────────────────────────────────────────────────────────
 
-class RoundedBox(Flowable):
-    def __init__(self, width, height, fill_color, stroke_color=None,
-                 radius=3, stroke_width=0.5):
-        super().__init__()
-        self.width        = width
-        self.height       = height
-        self.fill_color   = fill_color
-        self.stroke_color = stroke_color or fill_color
-        self.radius       = radius
-        self.stroke_width = stroke_width
-
-    def draw(self):
-        c = self.canv
-        c.saveState()
-        c.setFillColor(self.fill_color)
-        c.setStrokeColor(self.stroke_color)
-        c.setLineWidth(self.stroke_width)
-        c.roundRect(0, 0, self.width, self.height, self.radius, fill=1,
-                    stroke=1 if self.stroke_color != self.fill_color else 0)
-        c.restoreState()
-
-
 class ColorBar(Flowable):
-    def __init__(self, width, height=1.2 * mm, colors_list=None):
+    """Horizontal multi-colour stripe used under headers."""
+
+    def __init__(self, width, height=1.5 * mm, colors_list=None):
         super().__init__()
         self.width       = width
         self.height      = height
-        self.colors_list = colors_list or [NAVY, BLUE, ACCENT]
+        self.colors_list = colors_list or [SCHOOL_DARK, SCHOOL_GREEN, GOLD]
 
     def draw(self):
-        c     = self.canv
         seg_w = self.width / len(self.colors_list)
         for i, col in enumerate(self.colors_list):
-            c.setFillColor(col)
-            c.rect(i * seg_w, 0, seg_w, self.height, fill=1, stroke=0)
+            self.canv.setFillColor(col)
+            self.canv.rect(i * seg_w, 0, seg_w, self.height, fill=1, stroke=0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Image loading — with EXIF orientation fix
 # ─────────────────────────────────────────────────────────────────────────────
 
-def load_image_flowable(path_or_url, width, height):
+def load_image_flowable(path_or_url: str, width, height) -> Image | None:
     """
-    Load an image from a local path or remote URL.
-    Applies EXIF orientation correction so phone photos appear upright in PDFs.
+    Load an image from a local path or remote URL, apply EXIF rotation
+    correction, convert to RGB, and return a ReportLab Image flowable.
     """
     try:
-        if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+        if path_or_url.startswith(("http://", "https://")):
             resp = requests.get(path_or_url, timeout=10)
             resp.raise_for_status()
             img_bytes = BytesIO(resp.content)
@@ -125,41 +128,35 @@ def load_image_flowable(path_or_url, width, height):
         else:
             return None
 
-        # Fix EXIF rotation — phones store images sideways with rotation metadata
         pil_img = PilImage.open(img_bytes)
-        pil_img = ImageOps.exif_transpose(pil_img)
-
-        # Convert to RGB — required for JPEG embedding in ReportLab
+        pil_img = ImageOps.exif_transpose(pil_img)          # fix phone rotation
         if pil_img.mode in ("RGBA", "P", "CMYK", "LA", "L"):
             pil_img = pil_img.convert("RGB")
 
-        corrected = BytesIO()
-        pil_img.save(corrected, format="JPEG", quality=90)
-        corrected.seek(0)
-
-        return Image(corrected, width=width, height=height)
+        out = BytesIO()
+        pil_img.save(out, format="JPEG", quality=92)
+        out.seek(0)
+        return Image(out, width=width, height=height)
 
     except Exception:
-        pass
-    return None
+        return None
 
 
-def load_logo():
-    return load_image_flowable(LOGO_PATH, width=20 * mm, height=20 * mm)
+def load_logo(width=24 * mm, height=24 * mm) -> Image | None:
+    return load_image_flowable(LOGO_PATH, width=width, height=height)
 
 
-def load_admission_photo(admission, width=28 * mm, height=34 * mm):
+def load_admission_photo(admission, width=28 * mm, height=34 * mm) -> Image | None:
     try:
         if not admission.photo:
             return None
-        photo_url = admission.photo.url
-        if not photo_url.startswith("http"):
-            photo_path = os.path.join(settings.MEDIA_ROOT, str(admission.photo))
-            return load_image_flowable(photo_path, width=width, height=height)
-        return load_image_flowable(photo_url, width=width, height=height)
+        url = admission.photo.url
+        if not url.startswith("http"):
+            path = os.path.join(settings.MEDIA_ROOT, str(admission.photo))
+            return load_image_flowable(path, width, height)
+        return load_image_flowable(url, width, height)
     except Exception:
-        pass
-    return None
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -167,10 +164,13 @@ def load_admission_photo(admission, width=28 * mm, height=34 * mm):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _style(size=9, bold=False, color=GRAY_800, align=TA_LEFT,
-           leading=None, space_after=0, italic=False):
-    font = ("Helvetica-BoldOblique" if bold and italic else
-            "Helvetica-Bold"        if bold           else
-            "Helvetica-Oblique"     if italic         else "Helvetica")
+           leading=None, space_after=0, italic=False) -> ParagraphStyle:
+    font = (
+        "Helvetica-BoldOblique" if bold and italic else
+        "Helvetica-Bold"        if bold            else
+        "Helvetica-Oblique"     if italic          else
+        "Helvetica"
+    )
     return ParagraphStyle(
         "p",
         parent=getSampleStyleSheet()["Normal"],
@@ -184,78 +184,82 @@ def _style(size=9, bold=False, color=GRAY_800, align=TA_LEFT,
 
 
 def para(text, size=9, bold=False, color=GRAY_800, align=TA_LEFT,
-         leading=None, space_after=0, italic=False):
+         leading=None, space_after=0, italic=False) -> Paragraph:
     return Paragraph(str(text), _style(size, bold, color, align, leading, space_after, italic))
 
 
-def divider(color=GRAY_200, thickness=0.6):
+def divider(color=GRAY_200, thickness=0.6) -> HRFlowable:
     return HRFlowable(width="100%", thickness=thickness, color=color,
                       spaceAfter=0, spaceBefore=0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Page-level canvas decorations
+# Page canvas decorations  (called on every page)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _on_page(canvas, doc):
     canvas.saveState()
 
-    # Faint diagonal watermark
-    canvas.setFont("Helvetica-Bold", 42)
-    canvas.setFillColor(colors.HexColor("#e8edf5"))
-    canvas.setFillAlpha(0.35)
+    # Diagonal watermark
+    canvas.setFont("Helvetica-Bold", 40)
+    canvas.setFillColor(colors.HexColor("#e5f0ea"))
+    canvas.setFillAlpha(0.30)
     canvas.translate(A4[0] / 2, A4[1] / 2)
     canvas.rotate(38)
-    canvas.drawCentredString(0, 0, "LEADING STARS ACADEMY")
+    canvas.drawCentredString(0, 0, SCHOOL_NAME)
     canvas.setFillAlpha(1.0)
 
-    # Top accent stripes
-    canvas.setFillColor(NAVY)
-    canvas.rect(0, A4[1] - 3, A4[0], 3, fill=1, stroke=0)
-    canvas.setFillColor(ACCENT)
-    canvas.rect(0, A4[1] - 5.5, A4[0], 2.5, fill=1, stroke=0)
+    # Top triple stripe: dark green / gold / green
+    canvas.setFillColor(SCHOOL_DARK)
+    canvas.rect(0, A4[1] - 3.5, A4[0], 3.5, fill=1, stroke=0)
+    canvas.setFillColor(GOLD)
+    canvas.rect(0, A4[1] - 6.5, A4[0], 3,   fill=1, stroke=0)
+    canvas.setFillColor(SCHOOL_GREEN)
+    canvas.rect(0, A4[1] - 8.5, A4[0], 2,   fill=1, stroke=0)
 
     # Bottom bar
-    canvas.setFillColor(NAVY)
-    canvas.rect(0, 0, A4[0], 4, fill=1, stroke=0)
+    canvas.setFillColor(SCHOOL_DARK)
+    canvas.rect(0, 0, A4[0], 5, fill=1, stroke=0)
+    canvas.setFillColor(GOLD)
+    canvas.rect(0, 5, A4[0], 2, fill=1, stroke=0)
 
-    # Page number
+    # Footer text
     canvas.setFont("Helvetica", 7)
     canvas.setFillColor(GRAY_400)
     canvas.drawCentredString(
-        A4[0] / 2, 6,
-        f"Page {doc.page}  •  Leading Stars Academy  •  Confidential"
+        A4[0] / 2, 8,
+        f"Page {doc.page}  \u2022  {SCHOOL_NAME}  \u2022  {SCHOOL_MOTTO}  \u2022  Confidential"
     )
 
     canvas.restoreState()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Section header — amber left-accent stripe
+# Section header — gold left-accent stripe + dark-green bar
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_section_header(title, icon=""):
+def build_section_header(title: str, icon: str = ""):
     label = f"{icon}  {title}".strip() if icon else title
 
-    stripe = Table([[""]], colWidths=[3 * mm], rowHeights=[8 * mm])
+    stripe = Table([[""]], colWidths=[3.5 * mm], rowHeights=[8 * mm])
     stripe.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), ACCENT),
+        ("BACKGROUND",    (0, 0), (-1, -1), GOLD),
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
     title_cell = Table(
         [[para(label, 9, bold=True, color=WHITE)]],
-        colWidths=[PW - 3 * mm],
+        colWidths=[PW - 3.5 * mm],
     )
     title_cell.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
+        ("BACKGROUND",    (0, 0), (-1, -1), SCHOOL_GREEN),
         ("TOPPADDING",    (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("LEFTPADDING",   (0, 0), (-1, -1), 10),
     ]))
 
-    combined = Table([[stripe, title_cell]], colWidths=[3 * mm, PW - 3 * mm])
+    combined = Table([[stripe, title_cell]], colWidths=[3.5 * mm, PW - 3.5 * mm])
     combined.setStyle(TableStyle([
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
@@ -271,28 +275,32 @@ def build_section_header(title, icon=""):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_page1_header(admission):
-    logo_img  = load_logo()
-    logo_cell = logo_img if logo_img else para("★", 18, bold=True, color=WHITE, align=TA_CENTER)
+    logo_img  = load_logo(24 * mm, 24 * mm)
+    logo_cell = logo_img or para("★", 18, bold=True, color=WHITE, align=TA_CENTER)
 
     admission_no = admission.admission_number or "PENDING"
     date_str = (admission.application_date.strftime("%d %B %Y")
                 if admission.application_date else "")
 
-    left = Table([[logo_cell]], colWidths=[24 * mm])
+    left = Table([[logo_cell]], colWidths=[28 * mm])
     left.setStyle(TableStyle([
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
         ("TOPPADDING",    (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
     ]))
 
     centre_content = [
-        para("LEADING STARS ACADEMY",  15, bold=True,  color=WHITE,  align=TA_CENTER),
-        para("WHERE LEADERS ARE BORN",  7, color=MBLUE, align=TA_CENTER, italic=True),
-        Spacer(1, 2 * mm),
-        para("ADMISSION FORM",         12, bold=True,  color=ACCENT, align=TA_CENTER),
+        para(SCHOOL_NAME,  14, bold=True, color=WHITE,      align=TA_CENTER),
+        para(SCHOOL_SUB,    7, color=SCHOOL_MID, align=TA_CENTER, italic=True),
+        Spacer(1, 1.5 * mm),
+        divider(GOLD, 0.8),
+        Spacer(1, 1.5 * mm),
+        para("ADMISSION FORM", 12, bold=True, color=GOLD,   align=TA_CENTER),
+        para(SCHOOL_MOTTO, 6.5, color=SCHOOL_MID, align=TA_CENTER, italic=True),
     ]
-    centre = Table([[centre_content]], colWidths=[122 * mm])
+    centre = Table([[centre_content]], colWidths=[118 * mm])
     centre.setStyle(TableStyle([
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
@@ -300,26 +308,24 @@ def build_page1_header(admission):
     ]))
 
     right_content = [
-        para("Ref. No.",      7, color=MBLUE,                              align=TA_RIGHT),
-        para(admission_no,    9, bold=True, color=WHITE,                   align=TA_RIGHT),
+        para("Ref. No.",     7, color=SCHOOL_MID,                      align=TA_RIGHT),
+        para(admission_no,   9, bold=True, color=WHITE,                 align=TA_RIGHT),
         Spacer(1, 3 * mm),
-        para("Date Applied",  7, color=MBLUE,                              align=TA_RIGHT),
-        para(date_str,        8, color=colors.HexColor("#e0e7ff"),         align=TA_RIGHT),
+        para("Date Applied", 7, color=SCHOOL_MID,                      align=TA_RIGHT),
+        para(date_str,       8, color=colors.HexColor("#d1fae5"),       align=TA_RIGHT),
     ]
     right = Table([[right_content]], colWidths=[36 * mm])
     right.setStyle(TableStyle([
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
     ]))
 
-    outer = Table([[left, centre, right]], colWidths=[24 * mm, 122 * mm, 36 * mm])
+    outer = Table([[left, centre, right]], colWidths=[28 * mm, 118 * mm, 36 * mm])
     outer.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
+        ("BACKGROUND",    (0, 0), (-1, -1), SCHOOL_DARK),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING",   (0, 0), (0, 0),   6),
-        ("RIGHTPADDING",  (-1, 0), (-1, 0), 4),
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
@@ -332,9 +338,9 @@ def build_page1_header(admission):
 
 def build_status_badge(admission):
     status_map = {
-        "approved": ("✓   ADMISSION APPROVED",  GREEN,  LGREEN,  GREEN),
-        "rejected": ("✗   ADMISSION REJECTED",  RED,    LRED,    RED),
-        "pending":  ("●   APPLICATION PENDING", ORANGE, LORANGE, ORANGE),
+        "approved": ("✓   ADMISSION APPROVED",  GREEN_OK, LGREEN,  GREEN_OK),
+        "rejected": ("✗   ADMISSION REJECTED",  RED,      LRED,    RED),
+        "pending":  ("●   APPLICATION PENDING", ORANGE,   LORANGE, ORANGE),
     }
     text, fg, bg, border = status_map.get(
         admission.status, ("●   APPLICATION PENDING", ORANGE, LORANGE, ORANGE)
@@ -349,9 +355,8 @@ def build_status_badge(admission):
         ("BOX",           (0, 0), (-1, -1), 1.5, border),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LINEBEFORE",    (0, 0), (0, -1),  4, border),
+        ("LINEBEFORE",    (0, 0), (0, -1),  5, border),
     ]))
-
     outer = Table([[inner]], colWidths=[PW])
     outer.setStyle(TableStyle([
         ("TOPPADDING",    (0, 0), (-1, -1), 2),
@@ -376,14 +381,14 @@ def build_photo_card(admission):
             (admission.first_name or " ")[0].upper() +
             (admission.last_name  or " ")[0].upper()
         )
-        photo_cell = para(initials, 18, bold=True, color=BLUE, align=TA_CENTER)
+        photo_cell = para(initials, 20, bold=True, color=SCHOOL_GREEN, align=TA_CENTER)
 
     inner = Table([[photo_cell]], colWidths=[30 * mm], rowHeights=[36 * mm])
     inner.setStyle(TableStyle([
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("BACKGROUND",    (0, 0), (-1, -1), LBLUE),
-        ("BOX",           (0, 0), (-1, -1), 2.0, NAVY),
+        ("BACKGROUND",    (0, 0), (-1, -1), SCHOOL_LIGHT),
+        ("BOX",           (0, 0), (-1, -1), 2.0, SCHOOL_GREEN),
     ]))
 
     label = Table(
@@ -408,12 +413,36 @@ def build_photo_card(admission):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Student info section
+# Generic info table (label / value rows)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _info_table(rows, cw1=42 * mm, cw2=46 * mm, accent=SCHOOL_GREEN):
+    tbl_rows = [
+        [para(lbl, 8, bold=True, color=accent), para(val, 8, color=GRAY_800)]
+        for lbl, val in rows
+    ]
+    t = Table(tbl_rows, colWidths=[cw1, cw2])
+    t.setStyle(TableStyle([
+        ("TOPPADDING",    (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        ("LINEBELOW",     (0, 0), (-1, -2), 0.4, GRAY_200),
+        *[("BACKGROUND", (0, i), (-1, i),
+           WHITE if i % 2 == 0 else GRAY_50)
+          for i in range(len(rows))],
+    ]))
+    return t
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Student section
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_student_section(admission):
     class_name = admission.applied_class.name if admission.applied_class else "—"
-    dob = admission.date_of_birth.strftime("%d %B %Y") if admission.date_of_birth else "—"
+    dob = (admission.date_of_birth.strftime("%d %B %Y")
+           if admission.date_of_birth else "—")
 
     left_rows = [
         ("Full Name",       f"{admission.first_name} {admission.last_name}".strip() or "—"),
@@ -428,32 +457,8 @@ def build_student_section(admission):
         ("Health Notes",    admission.health_notes    or "None"),
     ]
 
-    def info_table(rows, cw1=42 * mm, cw2=46 * mm):
-        tbl_rows = []
-        for lbl, val in rows:
-            tbl_rows.append([
-                para(lbl, 8, bold=True, color=NAVY),
-                para(val,  8, color=GRAY_800),
-            ])
-        t = Table(tbl_rows, colWidths=[cw1, cw2])
-        t.setStyle(TableStyle([
-            ("TOPPADDING",    (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-            ("LINEBELOW",     (0, 0), (-1, -2), 0.4, GRAY_200),
-            *[("BACKGROUND", (0, i), (-1, i),
-               WHITE if i % 2 == 0 else GRAY_50)
-              for i in range(len(rows))],
-        ]))
-        return t
-
-    left_tbl  = info_table(left_rows)
-    right_tbl = info_table(right_rows)
-    photo     = build_photo_card(admission)
-
     combined = Table(
-        [[left_tbl, right_tbl, photo]],
+        [[_info_table(left_rows),  _info_table(right_rows), build_photo_card(admission)]],
         colWidths=[88 * mm, 88 * mm, 36 * mm],
     )
     combined.setStyle(TableStyle([
@@ -469,8 +474,7 @@ def build_student_section(admission):
         ("VALIGN",        (2, 0), (2, 0),   "MIDDLE"),
         ("TOPPADDING",    (2, 0), (2, 0),   8),
         ("BOTTOMPADDING", (2, 0), (2, 0),   8),
-        # Navy left accent
-        ("LINEBEFORE",    (0, 0), (0, -1),  3, NAVY),
+        ("LINEBEFORE",    (0, 0), (0, -1),  3.5, SCHOOL_GREEN),
     ]))
     return combined
 
@@ -490,13 +494,10 @@ def build_parent_section(admission):
         ("Home Address",           admission.address       or "—"),
     ]
 
-    tbl_rows = []
-    for lbl, val in rows:
-        tbl_rows.append([
-            para(lbl, 8, bold=True, color=NAVY),
-            para(val,  8, color=GRAY_800),
-        ])
-
+    tbl_rows = [
+        [para(lbl, 8, bold=True, color=TEAL), para(val, 8, color=GRAY_800)]
+        for lbl, val in rows
+    ]
     tbl = Table(tbl_rows, colWidths=[52 * mm, PW - 52 * mm])
     tbl.setStyle(TableStyle([
         ("TOPPADDING",    (0, 0), (-1, -1), 6),
@@ -505,10 +506,47 @@ def build_parent_section(admission):
         ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
         ("LINEBELOW",     (0, 0), (-1, -2), 0.4, GRAY_200),
         ("BOX",           (0, 0), (-1, -1), 0.8, GRAY_200),
-        ("LINEBEFORE",    (0, 0), (0, -1),  3, TEAL),
+        ("LINEBEFORE",    (0, 0), (0, -1),  3.5, TEAL),
         *[("BACKGROUND", (0, i), (-1, i),
            WHITE if i % 2 == 0 else GRAY_50)
           for i in range(len(rows))],
+    ]))
+    return tbl
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admission checklist  (NEW)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_checklist_section():
+    """
+    Printable document checklist that school staff tick off manually.
+    Gold accent to visually distinguish from other sections.
+    """
+    items = [
+        "Certified copies of birth certificate submitted",
+        "Two recent passport photographs attached",
+        "Previous school report card enclosed",
+        "Medical / immunisation records provided",
+        "Parent / Guardian ID copy attached",
+        "School fees deposit paid (receipt enclosed)",
+    ]
+    rows = [
+        [para("□", 10, bold=True, color=SCHOOL_GREEN), para(item, 8, color=GRAY_800)]
+        for item in items
+    ]
+    tbl = Table(rows, colWidths=[8 * mm, PW - 8 * mm])
+    tbl.setStyle(TableStyle([
+        ("TOPPADDING",    (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING",   (0, 0), (0, -1),  10),
+        ("LEFTPADDING",   (1, 0), (1, -1),  4),
+        ("LINEBELOW",     (0, 0), (-1, -2), 0.4, GRAY_200),
+        ("BOX",           (0, 0), (-1, -1), 0.8, GRAY_200),
+        ("LINEBEFORE",    (0, 0), (0, -1),  3.5, GOLD),
+        *[("BACKGROUND", (0, i), (-1, i),
+           WHITE if i % 2 == 0 else GOLD_LIGHT)
+          for i in range(len(items))],
     ]))
     return tbl
 
@@ -518,19 +556,19 @@ def build_parent_section(admission):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_footer_note():
-    content = Table([[
+    tbl = Table([[
         para(
-            "This is an official admission record of Leading Stars Academy.  "
+            f"This is an official admission record of {SCHOOL_NAME}.  "
             "Please retain a copy for your records.  "
-            "For enquiries call the school office.",
+            "For enquiries, contact the school office.",
             7, color=GRAY_400, align=TA_CENTER, italic=True,
         )
     ]], colWidths=[PW])
-    content.setStyle(TableStyle([
+    tbl.setStyle(TableStyle([
         ("TOPPADDING",    (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    return content
+    return tbl
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -538,26 +576,28 @@ def build_footer_note():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_acceptance_header():
-    logo_img  = load_logo()
-    logo_cell = logo_img if logo_img else para("★", 18, bold=True, color=WHITE, align=TA_CENTER)
+    logo_img  = load_logo(24 * mm, 24 * mm)
+    logo_cell = logo_img or para("★", 18, bold=True, color=WHITE, align=TA_CENTER)
 
     centre_content = [
-        para("LEADING STARS ACADEMY",  15, bold=True,  color=WHITE,  align=TA_CENTER),
-        para("WHERE LEADERS ARE BORN",  7, color=MBLUE, align=TA_CENTER, italic=True),
-        Spacer(1, 2 * mm),
-        para("ACCEPTANCE FORM",        12, bold=True,  color=ACCENT, align=TA_CENTER),
+        para(SCHOOL_NAME,       14, bold=True, color=WHITE,      align=TA_CENTER),
+        para(SCHOOL_SUB,         7, color=SCHOOL_MID, align=TA_CENTER, italic=True),
+        Spacer(1, 1.5 * mm),
+        divider(GOLD, 0.8),
+        Spacer(1, 1.5 * mm),
+        para("ACCEPTANCE FORM", 12, bold=True, color=GOLD,       align=TA_CENTER),
         para(
             "To be signed and returned to the school office within 14 days",
-            8, color=colors.HexColor("#c7d2fe"), align=TA_CENTER, italic=True,
+            7.5, color=SCHOOL_MID, align=TA_CENTER, italic=True,
         ),
     ]
 
     tbl = Table(
         [[logo_cell, centre_content, para("", 9)]],
-        colWidths=[24 * mm, 142 * mm, 16 * mm],
+        colWidths=[28 * mm, 138 * mm, 16 * mm],
     )
     tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
+        ("BACKGROUND",    (0, 0), (-1, -1), SCHOOL_DARK),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
@@ -567,7 +607,7 @@ def build_acceptance_header():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Acceptance intro text
+# Acceptance intro paragraph
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_intro_text(admission):
@@ -576,27 +616,27 @@ def build_intro_text(admission):
 
     intro = (
         f"I/We, the undersigned parent/guardian of <b>{name}</b>, hereby accept the offer of "
-        f"admission to <b>{class_name}</b> at <b>Leading Stars Academy</b> and agree to abide "
-        f"by all school rules, regulations, and fee payment obligations as outlined in the "
-        f"school&#x2019;s handbook."
+        f"admission to <b>{class_name}</b> at <b>{SCHOOL_NAME}</b> and agree to abide "
+        "by all school rules, regulations, and fee payment obligations as outlined in the "
+        "school&#x2019;s handbook."
     )
     style = ParagraphStyle(
         "intro",
         parent=getSampleStyleSheet()["Normal"],
         fontSize=9.5, fontName="Helvetica",
-        textColor=GRAY_800, leading=16, spaceAfter=0,
+        textColor=GRAY_800, leading=16,
     )
 
     bar = Table([[""]], colWidths=[4 * mm])
     bar.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), TEAL),
+        ("BACKGROUND",    (0, 0), (-1, -1), SCHOOL_GREEN),
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
     text_cell = Table([[Paragraph(intro, style)]], colWidths=[PW - 4 * mm])
     text_cell.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), LTEAL),
+        ("BACKGROUND",    (0, 0), (-1, -1), SCHOOL_LIGHT),
         ("TOPPADDING",    (0, 0), (-1, -1), 10),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
         ("LEFTPADDING",   (0, 0), (-1, -1), 12),
@@ -610,20 +650,21 @@ def build_intro_text(admission):
         ("LEFTPADDING",   (0, 0), (-1, -1), 0),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
         ("VALIGN",        (0, 0), (-1, -1), "STRETCH"),
-        ("BOX",           (0, 0), (-1, -1), 0.8, TEAL),
+        ("BOX",           (0, 0), (-1, -1), 0.8, SCHOOL_GREEN),
     ]))
     return combined
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Signature fields
+# Signature helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _sig_field(label, width, tall=False):
-    h    = 28 * mm if tall else 20 * mm
+def _sig_field(label: str, width, tall=False):
+    """Returns (line_table, label_table) for a single signature field."""
+    h = 28 * mm if tall else 20 * mm
     line = Table([[""]], colWidths=[width], rowHeights=[h])
     line.setStyle(TableStyle([
-        ("LINEBELOW",     (0, 0), (-1, -1), 1.2, GRAY_800),
+        ("LINEBELOW",     (0, 0), (-1, -1), 1.2, GRAY_700),
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ("LEFTPADDING",   (0, 0), (-1, -1), 0),
@@ -642,21 +683,26 @@ def _sig_field(label, width, tall=False):
 
 
 def _two_col_row(items, gap=6 * mm):
-    """Helper: place two (line, lbl) pairs side by side."""
+    """Place two (line, lbl) pairs side by side."""
     (l1, b1), (l2, b2) = items
     w = (PW - gap) / 2
+    _pad = TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ])
     row = Table([[l1, Spacer(gap, 1), l2]], colWidths=[w, gap, w])
     lbl = Table([[b1, Spacer(gap, 1), b2]], colWidths=[w, gap, w])
-    for t in (row, lbl):
-        t.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
+    row.setStyle(_pad)
+    lbl.setStyle(_pad)
     return row, lbl
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Signature section (parent + school declarations)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def build_signature_section():
     elements = []
@@ -666,38 +712,32 @@ def build_signature_section():
     elements.append(build_section_header("PARENT / GUARDIAN DECLARATION"))
     elements.append(Spacer(1, GAP))
 
-    row1, lbl1 = _two_col_row([
+    r1, l1 = _two_col_row([
         _sig_field("Full Name of Parent / Guardian", (PW - GAP) / 2),
         _sig_field("Relationship to Student",         (PW - GAP) / 2),
     ])
-    elements += [row1, lbl1, Spacer(1, GAP)]
+    elements += [r1, l1, Spacer(1, GAP)]
 
-    row2, lbl2 = _two_col_row([
+    r2, l2 = _two_col_row([
         _sig_field("Phone Number",  (PW - GAP) / 2),
         _sig_field("Email Address", (PW - GAP) / 2),
     ])
-    elements += [row2, lbl2, Spacer(1, GAP)]
+    elements += [r2, l2, Spacer(1, GAP)]
 
-    # Signature (wide) + Date (narrow)
     sg_line, sg_lbl = _sig_field("Signature of Parent / Guardian", PW * 0.62, tall=True)
-    dt_line, dt_lbl = _sig_field("Date",                           PW * 0.34, tall=True)
-    row3 = Table(
-        [[sg_line, Spacer(4 * mm, 1), dt_line]],
-        colWidths=[PW * 0.62, 4 * mm, PW * 0.34],
-    )
-    lbl3 = Table(
-        [[sg_lbl, Spacer(4 * mm, 1), dt_lbl]],
-        colWidths=[PW * 0.62, 4 * mm, PW * 0.34],
-    )
-    for t in (row3, lbl3):
-        t.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-    elements += [row3, lbl3]
+    dt_line, dt_lbl = _sig_field("Date (DD / MM / YYYY)",          PW * 0.34, tall=True)
+
+    _pad = TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ])
+    r3 = Table([[sg_line, Spacer(4*mm, 1), dt_line]], colWidths=[PW*.62, 4*mm, PW*.34])
+    l3 = Table([[sg_lbl,  Spacer(4*mm, 1), dt_lbl]],  colWidths=[PW*.62, 4*mm, PW*.34])
+    r3.setStyle(_pad);  l3.setStyle(_pad)
+    elements += [r3, l3]
 
     elements.append(Spacer(1, 10 * mm))
     elements.append(divider(GRAY_200, 0.8))
@@ -708,9 +748,9 @@ def build_signature_section():
     elements.append(Spacer(1, GAP))
 
     declaration = (
-        "This is to certify that the above-named student has been duly admitted to "
-        "Leading Stars Academy and is entitled to all the rights and privileges of a "
-        "student of this institution, subject to compliance with all school regulations."
+        f"This is to certify that the above-named student has been duly admitted to "
+        f"{SCHOOL_NAME} and is entitled to all the rights and privileges of a student "
+        "of this institution, subject to compliance with all school regulations."
     )
     decl_style = ParagraphStyle(
         "decl",
@@ -726,48 +766,33 @@ def build_signature_section():
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
         ("LEFTPADDING",   (0, 0), (-1, -1), 12),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
-        ("LINEBEFORE",    (0, 0), (0, -1),  3, NAVY),
+        ("LINEBEFORE",    (0, 0), (0, -1),  3.5, SCHOOL_GREEN),
     ]))
     elements.append(decl_box)
     elements.append(Spacer(1, GAP))
 
-    # Principal sig + stamp + date
     pr_line, pr_lbl = _sig_field("Signature of Principal / Head Teacher", PW * 0.38, tall=True)
     st_line, st_lbl = _sig_field("Official School Stamp",                 PW * 0.30, tall=True)
     pd_line, pd_lbl = _sig_field("Date",                                  PW * 0.26, tall=True)
 
-    pr_row = Table(
-        [[pr_line, Spacer(2 * mm, 1), st_line, Spacer(2 * mm, 1), pd_line]],
-        colWidths=[PW * 0.38, 2 * mm, PW * 0.30, 2 * mm, PW * 0.26],
-    )
-    pr_lbl_row = Table(
-        [[pr_lbl, Spacer(2 * mm, 1), st_lbl, Spacer(2 * mm, 1), pd_lbl]],
-        colWidths=[PW * 0.38, 2 * mm, PW * 0.30, 2 * mm, PW * 0.26],
-    )
-    for t in (pr_row, pr_lbl_row):
-        t.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-    elements += [pr_row, pr_lbl_row]
+    cw = [PW*.38, 2*mm, PW*.30, 2*mm, PW*.26]
+    pr_row = Table([[pr_line, Spacer(2*mm,1), st_line, Spacer(2*mm,1), pd_line]], colWidths=cw)
+    pr_lbl = Table([[pr_lbl,  Spacer(2*mm,1), st_lbl,  Spacer(2*mm,1), pd_lbl]],  colWidths=cw)
+    pr_row.setStyle(_pad);  pr_lbl.setStyle(_pad)
+    elements += [pr_row, pr_lbl]
     elements.append(Spacer(1, 8 * mm))
 
-    # Stamp placeholder (right-aligned)
     stamp = Table(
         [[para("OFFICIAL\nSTAMP", 8, color=GRAY_400, bold=True, align=TA_CENTER)]],
-        colWidths=[48 * mm],
-        rowHeights=[32 * mm],
+        colWidths=[48 * mm], rowHeights=[32 * mm],
     )
     stamp.setStyle(TableStyle([
-        ("BOX",           (0, 0), (-1, -1), 1.2, GRAY_300),
-        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("BACKGROUND",    (0, 0), (-1, -1), GRAY_50),
+        ("BOX",        (0, 0), (-1, -1), 1.2, GRAY_300),
+        ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (-1, -1), GRAY_50),
     ]))
-    stamp_row = Table([[para("", 1), stamp]], colWidths=[PW - 52 * mm, 52 * mm])
+    stamp_row = Table([[para("", 1), stamp]], colWidths=[PW - 52*mm, 52*mm])
     stamp_row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "BOTTOM")]))
     elements.append(stamp_row)
 
@@ -783,12 +808,12 @@ def build_acceptance_footer():
         ("⚠", "This form must be signed and returned to the school office within 14 days of the offer."),
         ("⚠", "Failure to return this form may result in the admission offer being withdrawn."),
         ("✓", "Please retain the yellow copy for your own records."),
+        ("✓", "Contact the school registrar for any queries regarding this admission."),
     ]
-    rows = [[
-        para(icon, 8, bold=True, color=ACCENT),
-        para(text, 7.5, color=GRAY_600),
-    ] for icon, text in lines]
-
+    rows = [
+        [para(icon, 9, bold=True, color=GOLD), para(text, 7.5, color=GRAY_600)]
+        for icon, text in lines
+    ]
     tbl = Table(rows, colWidths=[8 * mm, PW - 8 * mm])
     tbl.setStyle(TableStyle([
         ("TOPPADDING",    (0, 0), (-1, -1), 5),
@@ -798,13 +823,13 @@ def build_acceptance_footer():
         ("LINEBELOW",     (0, 0), (-1, -2), 0.3, GRAY_200),
         ("BOX",           (0, 0), (-1, -1), 0.8, GRAY_200),
         ("BACKGROUND",    (0, 0), (-1, -1), GRAY_50),
-        ("LINEBEFORE",    (0, 0), (0, -1),  3.5, ACCENT),
+        ("LINEBEFORE",    (0, 0), (0, -1),  3.5, GOLD),
     ]))
     return tbl
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# View
+# Django REST Framework view
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AdmissionFormPDFView(APIView):
@@ -828,15 +853,15 @@ class AdmissionFormPDFView(APIView):
             pagesize=A4,
             leftMargin=16 * mm,
             rightMargin=16 * mm,
-            topMargin=16 * mm,
-            bottomMargin=16 * mm,
+            topMargin=18 * mm,
+            bottomMargin=18 * mm,
         )
 
         elements = []
 
         # ── PAGE 1: Admission details ────────────────────────────────────────
         elements.append(build_page1_header(admission))
-        elements.append(ColorBar(PW, 2 * mm, [NAVY, BLUE, TEAL, ACCENT]))
+        elements.append(ColorBar(PW))
         elements.append(Spacer(1, 5 * mm))
         elements.append(build_status_badge(admission))
         elements.append(Spacer(1, 6 * mm))
@@ -849,7 +874,12 @@ class AdmissionFormPDFView(APIView):
         elements.append(build_section_header("PARENT / GUARDIAN INFORMATION"))
         elements.append(Spacer(1, 1.5 * mm))
         elements.append(build_parent_section(admission))
-        elements.append(Spacer(1, 10 * mm))
+        elements.append(Spacer(1, 6 * mm))
+
+        elements.append(build_section_header("ADMISSION CHECKLIST"))
+        elements.append(Spacer(1, 1.5 * mm))
+        elements.append(build_checklist_section())
+        elements.append(Spacer(1, 8 * mm))
 
         elements.append(divider(GRAY_200))
         elements.append(Spacer(1, 3 * mm))
@@ -857,15 +887,12 @@ class AdmissionFormPDFView(APIView):
 
         # ── PAGE 2: Acceptance form ──────────────────────────────────────────
         elements.append(PageBreak())
-
         elements.append(build_acceptance_header())
-        elements.append(ColorBar(PW, 2 * mm, [NAVY, BLUE, TEAL, ACCENT]))
+        elements.append(ColorBar(PW))
         elements.append(Spacer(1, 7 * mm))
         elements.append(build_intro_text(admission))
         elements.append(Spacer(1, 9 * mm))
-
         elements += build_signature_section()
-
         elements.append(Spacer(1, 7 * mm))
         elements.append(divider(GRAY_200))
         elements.append(Spacer(1, 4 * mm))
@@ -878,8 +905,8 @@ class AdmissionFormPDFView(APIView):
             f"{admission.first_name}_{admission.last_name}"
             .strip("_").replace(" ", "_")
         )
-        filename = f"admission_form_{name_slug}.pdf"
-
         response = HttpResponse(buffer, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Content-Disposition"] = (
+            f'attachment; filename="admission_form_{name_slug}.pdf"'
+        )
         return response
