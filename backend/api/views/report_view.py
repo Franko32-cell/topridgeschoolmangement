@@ -11,40 +11,54 @@ from apps.attendance.models import Attendance
 
 
 # ---------------------------------------------------------------------------
+# School info
+# ---------------------------------------------------------------------------
+
+SCHOOL_NAME    = "TOP RIDGE SCHOOL"
+SCHOOL_MOTTO   = "CENTRE OF DISTINCTION"
+SCHOOL_ADDRESS = "P.O BOX OD 292, Odorkor-Accra"
+SCHOOL_LOCATION = "Sanat-Maria Off the Kwashieman Motor way Highway."
+SCHOOL_TEL     = "027-1591-079"
+
+
+# ---------------------------------------------------------------------------
 # Grading systems
 # ---------------------------------------------------------------------------
 
+# Basic 7–9 — numeric grades (1–9) as seen on Ohemaa's report
 GRADE_THRESHOLDS_B79 = [
-    (90, "1", "HIGHEST"),
-    (80, "2", "HIGHER"),
-    (60, "3", "HIGH"),
-    (55, "4", "HIGH AVERAGE"),
-    (50, "5", "AVERAGE"),
-    (45, "6", "LOW AVERAGE"),
-    (40, "7", "LOW"),
-    (35, "8", "LOWER"),
+    (90, "1", "EXCELLENT"),
+    (80, "2", "VERY GOOD"),
+    (70, "3", "GOOD"),
+    (60, "4", "HIGH AVERAGE"),
+    (55, "5", "AVERAGE"),
+    (50, "6", "LOW AVERAGE"),
+    (45, "7", "LOW"),
+    (40, "6", "LOWER"),
     (0,  "9", "LOWEST"),
 ]
 
+# Basic 1–6 — letter grades (A, B1, B2, C1, C2, D1, D2, E1, E2)
+# as seen on Janet's (Basic 3) and Thywords' (KG 2) reports
 GRADE_THRESHOLDS_B16 = [
     (90, "A",  "EXCELLENT"),
-    (80, "B",  "VERY GOOD"),
-    (60, "C",  "GOOD"),
-    (55, "D",  "HIGH AVERAGE"),
-    (45, "E2", "BELOW AVERAGE"),
-    (40, "E3", "LOW"),
-    (35, "E4", "LOWER"),
-    (0,  "E5", "LOWEST"),
+    (80, "B1", "VERY GOOD"),
+    (70, "B2", "GOOD"),
+    (60, "C1", "HIGH AVERAGE"),
+    (55, "C2", "AVERAGE"),
+    (50, "D1", "LOW AVERAGE"),
+    (45, "D2", "LOW"),
+    (40, "E1", "LOWER"),
+    (0,  "E2", "LOWEST"),
 ]
 
+# Nursery / KG — same letter system as Basic 1–6
 GRADE_THRESHOLDS_NKG = GRADE_THRESHOLDS_B16
 
-SCHOOL_NAMES = {
-    "nursery_kg": "LEADING STARS MONTESSORI",
-    "basic_1_6":  "LEADING STARS ACADEMY",
-    "basic_7_9":  "LEADING STARS ACADEMY",
-}
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def get_grade_and_remark(score: float, thresholds: list) -> tuple:
     for threshold, grade, remark in thresholds:
@@ -73,6 +87,34 @@ def format_position(n):
         else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     )
     return f"{n}{suffix}"
+
+
+def get_grading_scale(level: str) -> list:
+    """Return a human-readable grading scale for the report footer."""
+    if level in ("basic_1_6", "nursery_kg"):
+        return [
+            {"range": "90 – 100", "grade": "A",  "remark": "Excellent"},
+            {"range": "80 – 89",  "grade": "B1", "remark": "Very Good"},
+            {"range": "70 – 79",  "grade": "B2", "remark": "Good"},
+            {"range": "60 – 69",  "grade": "C1", "remark": "High Average"},
+            {"range": "55 – 59",  "grade": "C2", "remark": "Average"},
+            {"range": "50 – 54",  "grade": "D1", "remark": "Low Average"},
+            {"range": "45 – 49",  "grade": "D2", "remark": "Low"},
+            {"range": "40 – 44",  "grade": "E1", "remark": "Lower"},
+            {"range": "0 – 39",   "grade": "E2", "remark": "Lowest"},
+        ]
+    # Basic 7–9
+    return [
+        {"range": "90 – 100", "grade": "1", "remark": "Excellent"},
+        {"range": "80 – 89",  "grade": "2", "remark": "Very Good"},
+        {"range": "70 – 79",  "grade": "3", "remark": "Good"},
+        {"range": "60 – 69",  "grade": "4", "remark": "High Average"},
+        {"range": "55 – 59",  "grade": "5", "remark": "Average"},
+        {"range": "50 – 54",  "grade": "6", "remark": "Low Average"},
+        {"range": "45 – 49",  "grade": "7", "remark": "Low"},
+        {"range": "40 – 44",  "grade": "6", "remark": "Lower"},
+        {"range": "0 – 39",   "grade": "9", "remark": "Lowest"},
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +172,7 @@ class StudentReportView(APIView):
                 failed += 1
 
         subject_count = len(subjects)
-        average       = round(total_score / subject_count, 1) if subject_count else 0
+        average       = round(total_score / subject_count, 2) if subject_count else 0
         overall_grade = get_overall_grade(average, thresholds)
 
         # Attendance
@@ -155,39 +197,57 @@ class StudentReportView(APIView):
             None,
         ) if show_position else None
 
+        number_on_roll = class_students.count()
+
         return Response({
+            # School info
+            "school_name":      SCHOOL_NAME,
+            "school_motto":     SCHOOL_MOTTO,
+            "school_address":   SCHOOL_ADDRESS,
+            "school_location":  SCHOOL_LOCATION,
+            "school_tel":       SCHOOL_TEL,
+
+            # Student info
             "student":            student.full_name,
             "admission_number":   student.admission_number,
             "class":              student.school_class.name if student.school_class else None,
             "photo":              student.photo.url if student.photo else None,
             "term":               term,
             "level":              level,
-            "school_name":        SCHOOL_NAMES.get(level, "LEADING STARS ACADEMY"),
             "show_position":      show_position,
+            "number_on_roll":     number_on_roll,
 
+            # Results
             "subjects":           subjects,
-            "total_score":        round(total_score, 1),
+            "total_score":        round(total_score, 2),
             "average_score":      average,
             "overall_grade":      overall_grade,
             "subjects_passed":    passed,
             "subjects_failed":    failed,
 
+            # Class position
             "position":           position,
             "position_formatted": format_position(position),
             "out_of":             len(ranked) if show_position else None,
 
+            # Attendance
             "attendance":         present_days,
             "attendance_total":   total_days,
             "attendance_percent": round((present_days / total_days) * 100) if total_days else 0,
 
-            # Remarks
+            # Teacher remarks
             "conduct":          report.conduct          if report else None,
+            "attitude":         report.attitude         if report else None,
             "interest":         report.interest         if report else None,
             "teacher_remark":   report.teacher_remark   if report else None,
+            "promoted_to":      report.promoted_to      if report else None,
 
             # Dates
             "vacation_date":    str(report.vacation_date)   if report and report.vacation_date   else None,
             "resumption_date":  str(report.resumption_date) if report and report.resumption_date else None,
+
+            # Grading scale for report footer
+            "grading_scale":    get_grading_scale(level),
         })
 
     # ── PATCH ─────────────────────────────────────────────────────────────
@@ -199,21 +259,22 @@ class StudentReportView(APIView):
 
         student = get_object_or_404(Student, id=student_id)
 
-        # year is part of unique_together — must be in the lookup, not just defaults
         report, _ = Report.objects.get_or_create(
             student=student,
             term=term,
             year=timezone.now().year,
             defaults={
                 "attendance":       0,
-                "attendance_total": 1,  # must be >= 1 per model validator
+                "attendance_total": 1,
             },
         )
 
         updatable = [
             "conduct",
+            "attitude",
             "interest",
             "teacher_remark",
+            "promoted_to",
             "vacation_date",
             "resumption_date",
         ]
@@ -233,8 +294,10 @@ class StudentReportView(APIView):
         return Response({
             "detail":           "Saved.",
             "conduct":          report.conduct,
+            "attitude":         report.attitude         if hasattr(report, "attitude") else None,
             "interest":         report.interest,
             "teacher_remark":   report.teacher_remark,
+            "promoted_to":      report.promoted_to      if hasattr(report, "promoted_to") else None,
             "vacation_date":    str(report.vacation_date)   if report.vacation_date   else None,
             "resumption_date":  str(report.resumption_date) if report.resumption_date else None,
         })
