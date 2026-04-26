@@ -54,6 +54,15 @@ const SignOutIcon = () => (
   </svg>
 );
 
+// ── School logo mark ───────────────────────────────────────────────────────────
+const SchoolMark = () => (
+  <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/>
+    </svg>
+  </div>
+);
+
 // ── NotificationPanel ──────────────────────────────────────────────────────────
 const NotificationPanel = ({ announcements, unread }) => (
   <div className="absolute right-0 top-[calc(100%+8px)] w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-dropdown">
@@ -86,6 +95,9 @@ const NotificationPanel = ({ announcements, unread }) => (
         })
       )}
     </div>
+    <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50/60">
+      <p className="text-[11px] text-slate-400 text-center">Top Ridge School · Admin Portal</p>
+    </div>
   </div>
 );
 
@@ -106,6 +118,9 @@ const UserMenu = ({ user }) => (
     <div className="px-4 py-3.5 border-b border-slate-100 bg-slate-50/60">
       <p className="text-sm font-bold text-slate-800 leading-tight">{user?.username}</p>
       <p className="text-xs text-slate-400 mt-0.5">{user?.email || "Administrator"}</p>
+      <span className="inline-block mt-1.5 text-[10px] font-semibold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full capitalize">
+        {user?.role ?? "admin"}
+      </span>
     </div>
     <div className="py-1">
       <MenuItem icon={<ProfileIcon />} label="Profile" />
@@ -148,7 +163,7 @@ const Topbar = ({ onMenuToggle, sidebarOpen }) => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const initial = user?.username?.[0]?.toUpperCase() ?? "A";
+  const initial = user?.username?.[0]?.toUpperCase() ?? "T";
 
   return (
     <header className="h-14 bg-white border-b border-slate-100 flex items-center px-4 gap-3 z-30 sticky top-0">
@@ -179,11 +194,9 @@ const Topbar = ({ onMenuToggle, sidebarOpen }) => {
 
       {/* ── Brand ── */}
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-[10px] font-black tracking-tight">LAA</span>
-        </div>
+        <SchoolMark />
         <div className="hidden sm:flex flex-col leading-none min-w-0">
-          <span className="text-[13px] font-bold text-slate-800 truncate">Lea inttatars Arademyademyademy</span>
+          <span className="text-[13px] font-bold text-slate-800 truncate">Top Ridge School</span>
           <span className="text-[11px] text-slate-400 mt-0.5">Admin portal</span>
         </div>
       </div>
@@ -228,7 +241,7 @@ const Topbar = ({ onMenuToggle, sidebarOpen }) => {
             className={`flex items-center gap-2 pl-1.5 pr-2 py-1.5 rounded-xl transition-colors
               ${dropdownOpen ? "bg-slate-100" : "hover:bg-slate-100"}`}
           >
-            <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
               {initial}
             </div>
             <div className="hidden sm:flex flex-col leading-none text-left">
