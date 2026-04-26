@@ -10,9 +10,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key")
 
-DEBUG = os.getenv("DEBUG", "True") == "True"
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    "top-ridge-school.onrender.com",
+    "localhost",
+    "127.0.0.1",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://top-ridge-school.onrender.com",
+]
 
 
 # ── Installed Apps ─────────────────────────────────────────────
@@ -87,14 +95,6 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # ── Database (Supabase PostgreSQL) ─────────────────────────────
-#
-# Set DATABASE_URL in your Render environment variables.
-# Get it from: Supabase → Project Settings → Database → Connection string
-# Use the "URI" format:
-#   postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
-#
-# TIP: Use the "Session mode" pooler (port 5432) for Render.
-# Avoid Transaction mode (port 6543) — it breaks Django migrations.
 
 DATABASES = {
     'default': dj_database_url.config(
