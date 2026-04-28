@@ -11,21 +11,24 @@ from apps.attendance.models import Attendance
 
 
 # ---------------------------------------------------------------------------
-# School info
+# School info  (matches Top Ridge School report cards exactly)
 # ---------------------------------------------------------------------------
 
-SCHOOL_NAME    = "TOP RIDGE SCHOOL"
-SCHOOL_MOTTO   = "CENTRE OF DISTINCTION"
-SCHOOL_ADDRESS = "P.O BOX OD 292, Odorkor-Accra"
+SCHOOL_NAME     = "TOP RIDGE SCHOOL"
+SCHOOL_MOTTO    = "CENTRE OF DISTINCTION"
+SCHOOL_ADDRESS  = "P.O BOX OD 292, Odorkor-Accra"
 SCHOOL_LOCATION = "Sanat-Maria Off the Kwashieman Motor way Highway."
-SCHOOL_TEL     = "027-1591-079"
+SCHOOL_TEL      = "027-1591-079"
 
 
 # ---------------------------------------------------------------------------
 # Grading systems
 # ---------------------------------------------------------------------------
 
-# Basic 7–9 — numeric grades (1–9) as seen on Ohemaa's report
+# Basic 7–9 — numeric grades (1–9) as seen on Ohemaa's (Basic 7) report
+#   90–100 → 1 Excellent | 80–89 → 2 V.Good | 70–79 → 3 Good
+#   60–69  → 4 High Avg  | 55–59 → 5 Average | 50–54 → 6 Low Avg
+#   45–49  → 7 Low       | 40–44 → 6 Lower    | 0–39  → 9 Lowest
 GRADE_THRESHOLDS_B79 = [
     (90, "1", "EXCELLENT"),
     (80, "2", "VERY GOOD"),
@@ -38,8 +41,10 @@ GRADE_THRESHOLDS_B79 = [
     (0,  "9", "LOWEST"),
 ]
 
-# Basic 1–6 — letter grades (A, B1, B2, C1, C2, D1, D2, E1, E2)
-# as seen on Janet's (Basic 3) and Thywords' (KG 2) reports
+# Basic 1–6 — letter grades (A, B1, B2 …) as seen on Janet's (Basic 3) report
+#   90–100 → A Excellent | 80–89 → B1 V.Good | 70–79 → B2 Good
+#   60–69  → C1 High Avg | 55–59 → C2 Average | 50–54 → D1 Low Avg
+#   45–49  → D2 Low      | 40–44 → E1 Lower   | 0–39  → E2 Lowest
 GRADE_THRESHOLDS_B16 = [
     (90, "A",  "EXCELLENT"),
     (80, "B1", "VERY GOOD"),
@@ -61,6 +66,7 @@ GRADE_THRESHOLDS_NKG = GRADE_THRESHOLDS_B16
 # ---------------------------------------------------------------------------
 
 def get_grade_and_remark(score: float, thresholds: list) -> tuple:
+    """Return (grade, remark) for a given score using the supplied threshold table."""
     for threshold, grade, remark in thresholds:
         if score >= threshold:
             return grade, remark
@@ -76,10 +82,11 @@ def get_thresholds(level: str) -> list:
         return GRADE_THRESHOLDS_B16
     if level == "nursery_kg":
         return GRADE_THRESHOLDS_NKG
-    return GRADE_THRESHOLDS_B79
+    return GRADE_THRESHOLDS_B79   # default: basic_7_9
 
 
-def format_position(n):
+def format_position(n: int | None) -> str | None:
+    """Return ordinal string e.g. 1 → '1st', 3 → '3rd'."""
     if n is None:
         return None
     suffix = (
@@ -90,7 +97,10 @@ def format_position(n):
 
 
 def get_grading_scale(level: str) -> list:
-    """Return a human-readable grading scale for the report footer."""
+    """
+    Return the grading scale list for the report footer.
+    Labels match exactly what is printed on the Top Ridge School report cards.
+    """
     if level in ("basic_1_6", "nursery_kg"):
         return [
             {"range": "90 – 100", "grade": "A",  "remark": "Excellent"},
@@ -103,7 +113,7 @@ def get_grading_scale(level: str) -> list:
             {"range": "40 – 44",  "grade": "E1", "remark": "Lower"},
             {"range": "0 – 39",   "grade": "E2", "remark": "Lowest"},
         ]
-    # Basic 7–9
+    # Basic 7–9 scale (matches Ohemaa's report card grading key)
     return [
         {"range": "90 – 100", "grade": "1", "remark": "Excellent"},
         {"range": "80 – 89",  "grade": "2", "remark": "Very Good"},
@@ -122,10 +132,9 @@ def get_grading_scale(level: str) -> list:
 # ---------------------------------------------------------------------------
 
 class StudentReportView(APIView):
-
     permission_classes = [IsAuthenticated]
 
-    # ── GET ──────────────────────────────────────────────────────────────
+    # ── GET ──────────────────────────────────────────────────────────────────
 
     def get(self, request, student_id):
         term = request.query_params.get("term")
@@ -135,31 +144,36 @@ class StudentReportView(APIView):
         student    = get_object_or_404(Student, id=student_id)
         level      = getattr(student.school_class, "level", "basic_7_9") if student.school_class else "basic_7_9"
         thresholds = get_thresholds(level)
+
+        # Nursery/KG reports use the Montessori rubric (MO/O/S/NA) —
+        # positions are not shown on those cards.
         show_position = level != "nursery_kg"
 
         results = (
             Result.objects
             .filter(student=student, term=term)
             .select_related("subject")
+            .order_by("subject__name")
         )
 
         report = Report.objects.filter(student=student, term=term).first()
 
         subjects    = []
-        total_score = 0
+        total_score = 0.0
         passed      = 0
         failed      = 0
 
         for r in results:
-            score         = r.score or 0
+            score         = r.score or 0.0
             grade, remark = get_grade_and_remark(score, thresholds)
 
             subjects.append({
                 "subject":          r.subject.name,
-                "reopen":           r.reopen,
-                "ca":               r.ca,
-                "exams":            r.exams,
-                "score":            r.score,
+                # Column order matches the printed report: CLASS SC.(40%) | RE-OPEN(20%) | EXAMS(40%)
+                "class_score":      r.ca,        # CLASS SC.  — 40%
+                "reopen":           r.reopen,    # READING AND RE-OPEN — 20%
+                "exams":            r.exams,     # EXAMS SCORE — 40%
+                "score":            r.score,     # TOTAL (100%)
                 "grade":            grade,
                 "remark":           remark,
                 "subject_position": r.subject_position if show_position else None,
@@ -172,17 +186,18 @@ class StudentReportView(APIView):
                 failed += 1
 
         subject_count = len(subjects)
-        average       = round(total_score / subject_count, 2) if subject_count else 0
+        average       = round(total_score / subject_count, 2) if subject_count else 0.0
         overall_grade = get_overall_grade(average, thresholds)
 
-        # Attendance
-        term_attendance = Attendance.objects.filter(student=student, term=term)
-        total_days      = term_attendance.count()
-        present_days    = term_attendance.filter(status__in=["present", "late"]).count()
+        # ── Attendance ───────────────────────────────────────────────────────
+        term_attendance  = Attendance.objects.filter(student=student, term=term)
+        total_days       = term_attendance.count()
+        present_days     = term_attendance.filter(status__in=["present", "late"]).count()
 
-        # Class ranking
-        class_students = Student.objects.filter(school_class=student.school_class)
-        student_totals = []
+        # ── Class ranking (overall position across all subjects) ─────────────
+        class_students  = Student.objects.filter(school_class=student.school_class)
+        number_on_roll  = class_students.count()
+        student_totals  = []
 
         for s in class_students:
             s_results = Result.objects.filter(student=s, term=term)
@@ -197,60 +212,58 @@ class StudentReportView(APIView):
             None,
         ) if show_position else None
 
-        number_on_roll = class_students.count()
-
         return Response({
-            # School info
-            "school_name":      SCHOOL_NAME,
-            "school_motto":     SCHOOL_MOTTO,
-            "school_address":   SCHOOL_ADDRESS,
-            "school_location":  SCHOOL_LOCATION,
-            "school_tel":       SCHOOL_TEL,
+            # ── School info ─────────────────────────────────────────────────
+            "school_name":     SCHOOL_NAME,
+            "school_motto":    SCHOOL_MOTTO,
+            "school_address":  SCHOOL_ADDRESS,
+            "school_location": SCHOOL_LOCATION,
+            "school_tel":      SCHOOL_TEL,
 
-            # Student info
-            "student":            student.full_name,
-            "admission_number":   student.admission_number,
-            "class":              student.school_class.name if student.school_class else None,
-            "photo":              student.photo.url if student.photo else None,
-            "term":               term,
-            "level":              level,
-            "show_position":      show_position,
-            "number_on_roll":     number_on_roll,
+            # ── Student info ────────────────────────────────────────────────
+            "student":          student.full_name,
+            "admission_number": student.admission_number,
+            "class":            student.school_class.name if student.school_class else None,
+            "photo":            student.photo.url if student.photo else None,
+            "term":             term,
+            "level":            level,
+            "show_position":    show_position,
+            "number_on_roll":   number_on_roll,
 
-            # Results
-            "subjects":           subjects,
-            "total_score":        round(total_score, 2),
-            "average_score":      average,
-            "overall_grade":      overall_grade,
-            "subjects_passed":    passed,
-            "subjects_failed":    failed,
+            # ── Results ──────────────────────────────────────────────────────
+            "subjects":        subjects,
+            "total_score":     round(total_score, 2),
+            "average_score":   average,
+            "overall_grade":   overall_grade,
+            "subjects_passed": passed,
+            "subjects_failed": failed,
 
-            # Class position
+            # ── Class position ───────────────────────────────────────────────
             "position":           position,
             "position_formatted": format_position(position),
             "out_of":             len(ranked) if show_position else None,
 
-            # Attendance
+            # ── Attendance ───────────────────────────────────────────────────
             "attendance":         present_days,
             "attendance_total":   total_days,
             "attendance_percent": round((present_days / total_days) * 100) if total_days else 0,
 
-            # Teacher remarks
-            "conduct":          report.conduct          if report else None,
-            "attitude":         report.attitude         if report else None,
-            "interest":         report.interest         if report else None,
-            "teacher_remark":   report.teacher_remark   if report else None,
-            "promoted_to":      report.promoted_to      if report else None,
+            # ── Teacher remarks (from Report model) ──────────────────────────
+            "conduct":        report.conduct        if report else None,
+            "attitude":       report.attitude       if report else None,
+            "interest":       report.interest       if report else None,
+            "teacher_remark": report.teacher_remark if report else None,
+            "promoted_to":    report.promoted_to    if report else None,
 
-            # Dates
-            "vacation_date":    str(report.vacation_date)   if report and report.vacation_date   else None,
-            "resumption_date":  str(report.resumption_date) if report and report.resumption_date else None,
+            # ── Term dates ───────────────────────────────────────────────────
+            "vacation_date":   str(report.vacation_date)   if report and report.vacation_date   else None,
+            "resumption_date": str(report.resumption_date) if report and report.resumption_date else None,
 
-            # Grading scale for report footer
-            "grading_scale":    get_grading_scale(level),
+            # ── Grading scale (for footer) ───────────────────────────────────
+            "grading_scale": get_grading_scale(level),
         })
 
-    # ── PATCH ─────────────────────────────────────────────────────────────
+    # ── PATCH ─────────────────────────────────────────────────────────────────
 
     def patch(self, request, student_id):
         term = request.data.get("term")
@@ -269,6 +282,7 @@ class StudentReportView(APIView):
             },
         )
 
+        # All teacher-editable fields — must match Report model fields exactly
         updatable = [
             "conduct",
             "attitude",
@@ -283,6 +297,7 @@ class StudentReportView(APIView):
         for field in updatable:
             if field in request.data:
                 value = request.data[field]
+                # Treat empty string as NULL for date fields
                 if field in ("vacation_date", "resumption_date") and value == "":
                     value = None
                 setattr(report, field, value)
@@ -292,12 +307,12 @@ class StudentReportView(APIView):
             report.save(update_fields=changed)
 
         return Response({
-            "detail":           "Saved.",
-            "conduct":          report.conduct,
-            "attitude":         report.attitude         if hasattr(report, "attitude") else None,
-            "interest":         report.interest,
-            "teacher_remark":   report.teacher_remark,
-            "promoted_to":      report.promoted_to      if hasattr(report, "promoted_to") else None,
-            "vacation_date":    str(report.vacation_date)   if report.vacation_date   else None,
-            "resumption_date":  str(report.resumption_date) if report.resumption_date else None,
+            "detail":          "Saved.",
+            "conduct":         report.conduct,
+            "attitude":        report.attitude,
+            "interest":        report.interest,
+            "teacher_remark":  report.teacher_remark,
+            "promoted_to":     report.promoted_to,
+            "vacation_date":   str(report.vacation_date)   if report.vacation_date   else None,
+            "resumption_date": str(report.resumption_date) if report.resumption_date else None,
         })
