@@ -1,9 +1,12 @@
+# ---------------------------------------------------------------------------
+# Student Report PDF View
+# ---------------------------------------------------------------------------
+
 class StudentReportPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, student_id):
-        from apps.students.models import Student
-        from apps.results.models import Result  # adjust import to your actual model path
+        from apps.results.models import Result
 
         student = get_object_or_404(Student, id=student_id)
         term    = request.query_params.get("term", "term1")
@@ -17,7 +20,7 @@ class StudentReportPDFView(APIView):
         )
         elements = []
 
-        # ── Header (reuses existing helpers) ──────────────────────────────────
+        # ── Header ────────────────────────────────────────────────────────────
         logo = load_logo()
         school_block = [
             para("TOP RIDGE SCHOOL",      12, bold=True, color=DGREEN, align=TA_CENTER),
@@ -39,7 +42,7 @@ class StudentReportPDFView(APIView):
         elements.append(header)
         elements.append(Spacer(1, 4 * mm))
 
-        # ── Student info ──────────────────────────────────────────────────────
+        # ── Student info + photo ──────────────────────────────────────────────
         class_name = student.school_class.name if student.school_class else "—"
         term_label = TERM_LABELS.get(term, term)
         photo      = load_student_photo(student, size=18 * mm)
@@ -83,20 +86,18 @@ class StudentReportPDFView(APIView):
         ).select_related("subject").order_by("subject__name")
 
         rows = [[
-            para("Subject",  8, bold=True, color=DGREEN),
-            para("Score",    8, bold=True, color=DGREEN, align=TA_RIGHT),
-            para("Grade",    8, bold=True, color=DGREEN, align=TA_RIGHT),
-            para("Remarks",  8, bold=True, color=DGREEN),
+            para("Subject", 8, bold=True, color=DGREEN),
+            para("Score",   8, bold=True, color=DGREEN, align=TA_RIGHT),
+            para("Grade",   8, bold=True, color=DGREEN, align=TA_RIGHT),
+            para("Remarks", 8, bold=True, color=DGREEN),
         ]]
-
         for r in results:
             rows.append([
-                para(r.subject.name, 8),
-                para(str(r.score),   8, align=TA_RIGHT),
-                para(r.grade,        8, align=TA_RIGHT),
-                para(r.remarks or "—", 8),
+                para(r.subject.name,    8),
+                para(str(r.score),      8, align=TA_RIGHT),
+                para(r.grade,           8, align=TA_RIGHT),
+                para(r.remarks or "—",  8),
             ])
-
         if len(rows) == 1:
             rows.append([para("No results recorded.", 8, color=LGRAY), para(""), para(""), para("")])
 
@@ -121,7 +122,10 @@ class StudentReportPDFView(APIView):
             f"Report generated: {timezone.now().strftime('%d %b %Y  %I:%M %p')}",
             7, color=LGRAY, align=TA_CENTER,
         ))
-        elements.append(para("Top Ridge School — Centre of Distinction", 7, color=LGRAY, align=TA_CENTER))
+        elements.append(para(
+            "Top Ridge School — Centre of Distinction",
+            7, color=LGRAY, align=TA_CENTER,
+        ))
 
         pdf.build(elements)
         pdf_data = buffer.getvalue()
