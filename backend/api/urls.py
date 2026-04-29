@@ -1,93 +1,137 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
+class StudentReportPDFView(APIView):
+    permission_classes = [IsAuthenticated]
 
-from api.views.student_view import StudentViewSet
-from api.views.teacher_view import TeacherViewSet
-from api.views.class_view import ClassViewSet
-from api.views.subject_view import SubjectViewSet
-from api.views.attendance_view import AttendanceViewSet
-from api.views.result_view import ResultViewSet
-from api.views.fee_view import FeeViewSet
-from api.views.announcement_view import AnnouncementViewSet
-from api.views.admission_view import AdmissionViewSet
-from api.views.dashboard_view import DashboardView
-from api.views.auth_view import (
-    RegisterView,
-    MeView,
-    LoginView,
-    AdminApprovalViewSet,
-    ChangePasswordView,
-)
-from api.views.report_view import StudentReportView
-from api.views.report_pdf_view import StudentReportPDFView
-from api.views.bill_pdf_view import StudentFeeBillPDFView, ClassFeeBillPDFView
-from api.views.receipt_pdf_view import PaymentReceiptPDFView
-from api.views.admission_form_pdf_view import AdmissionFormPDFView
-from api.views.accounts_view import (
-    AccountsDashboardView,
-    IncomeLedgerView,
-    FeeCollectionReportView,
-    DefaultersListView,
-    # ActiveUsersView removed — now lives in active_users_view.py
-)
-from api.views.active_users_view import ActiveUsersView   # ← correct import
+    def get(self, request, student_id):
+        from apps.students.models import Student
+        from apps.results.models import Result  # adjust import to your actual model path
 
-# ─── Router ───────────────────────────────────────────────────────────────────
-router = DefaultRouter()
-router.register("students",        StudentViewSet)
-router.register("teachers",        TeacherViewSet)
-router.register("classes",         ClassViewSet)
-router.register("subjects",        SubjectViewSet)
-router.register("attendance",      AttendanceViewSet)
-router.register("results",         ResultViewSet)
-router.register("fees",            FeeViewSet)
-router.register("announcements",   AnnouncementViewSet)
-router.register("admissions",      AdmissionViewSet)
-router.register("admin-approvals", AdminApprovalViewSet, basename="admin-approvals")
+        student = get_object_or_404(Student, id=student_id)
+        term    = request.query_params.get("term", "term1")
 
-# ─── URL Patterns ─────────────────────────────────────────────────────────────
-urlpatterns = [
+        buffer = BytesIO()
+        pdf = SimpleDocTemplate(
+            buffer,
+            pagesize=A5,
+            leftMargin=12 * mm, rightMargin=12 * mm,
+            topMargin=12 * mm,  bottomMargin=12 * mm,
+        )
+        elements = []
 
-    # ── Must come BEFORE router to avoid pk-lookup conflicts ──────────────────
-    path("results/bulk/",
-         ResultViewSet.as_view({"post": "bulk_save"})),
+        # ── Header (reuses existing helpers) ──────────────────────────────────
+        logo = load_logo()
+        school_block = [
+            para("TOP RIDGE SCHOOL",      12, bold=True, color=DGREEN, align=TA_CENTER),
+            para("CENTRE OF DISTINCTION",  7, color=LGRAY,             align=TA_CENTER),
+            Spacer(1, 1 * mm),
+            para("STUDENT REPORT",        10, bold=True, color=BLACK,  align=TA_CENTER),
+        ]
+        header = Table(
+            [[logo or para("", 9), school_block, para("", 9)]],
+            colWidths=[18 * mm, W - 36 * mm, 18 * mm],
+        )
+        header.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), LGREEN),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING",   (0, 0), (0,  0),  5),
+        ]))
+        elements.append(header)
+        elements.append(Spacer(1, 4 * mm))
 
-    path("admissions/<int:admission_id>/form/",
-         AdmissionFormPDFView.as_view()),
+        # ── Student info ──────────────────────────────────────────────────────
+        class_name = student.school_class.name if student.school_class else "—"
+        term_label = TERM_LABELS.get(term, term)
+        photo      = load_student_photo(student, size=18 * mm)
 
-    path("fees/bill/student/<int:student_id>/",
-         StudentFeeBillPDFView.as_view()),
+        info = Table([
+            [para("Student",      8, bold=True, color=DGREEN), para(student.full_name,        8)],
+            [para("Admission No", 8, bold=True, color=DGREEN), para(student.admission_number, 8)],
+            [para("Class",        8, bold=True, color=DGREEN), para(class_name,               8)],
+            [para("Term",         8, bold=True, color=DGREEN), para(term_label,               8)],
+        ], colWidths=[28 * mm, W - 28 * mm - 22 * mm])
+        info.setStyle(TableStyle([
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+            ("LINEBELOW",     (0, 0), (-1, -2), 0.3, colors.HexColor("#e5e7eb")),
+        ]))
+        photo_wrapper = Table([[photo or para("", 9)]], colWidths=[20 * mm])
+        photo_wrapper.setStyle(TableStyle([
+            ("BOX",           (0, 0), (-1, -1), 1.2, DGREEN),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("BACKGROUND",    (0, 0), (-1, -1), LGREEN),
+            ("TOPPADDING",    (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        student_card = Table([[info, photo_wrapper]], colWidths=[W - 22 * mm, 22 * mm])
+        student_card.setStyle(TableStyle([
+            ("BOX",           (0, 0), (-1, -1), 0.6, BORDER),
+            ("BACKGROUND",    (0, 0), (-1, -1), OFFWHITE),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        elements.append(student_card)
+        elements.append(Spacer(1, 4 * mm))
 
-    path("fees/bill/class/",
-         ClassFeeBillPDFView.as_view()),
+        # ── Results table ─────────────────────────────────────────────────────
+        elements.append(para("Academic Results", 9, bold=True, color=DGREEN))
+        elements.append(Spacer(1, 2 * mm))
 
-    path("fees/receipt/<int:transaction_id>/",
-         PaymentReceiptPDFView.as_view()),
+        results = Result.objects.filter(
+            student=student, term=term
+        ).select_related("subject").order_by("subject__name")
 
-    path("report/student/<int:student_id>/",
-         StudentReportView.as_view()),
+        rows = [[
+            para("Subject",  8, bold=True, color=DGREEN),
+            para("Score",    8, bold=True, color=DGREEN, align=TA_RIGHT),
+            para("Grade",    8, bold=True, color=DGREEN, align=TA_RIGHT),
+            para("Remarks",  8, bold=True, color=DGREEN),
+        ]]
 
-    path("report/student/<int:student_id>/pdf/",
-         StudentReportPDFView.as_view()),
+        for r in results:
+            rows.append([
+                para(r.subject.name, 8),
+                para(str(r.score),   8, align=TA_RIGHT),
+                para(r.grade,        8, align=TA_RIGHT),
+                para(r.remarks or "—", 8),
+            ])
 
-    # ── Router (registers all ViewSets) ───────────────────────────────────────
-    path("", include(router.urls)),
+        if len(rows) == 1:
+            rows.append([para("No results recorded.", 8, color=LGRAY), para(""), para(""), para("")])
 
-    # ── Auth ──────────────────────────────────────────────────────────────────
-    path("auth/login/",           LoginView.as_view()),
-    path("auth/refresh/",         TokenRefreshView.as_view()),
-    path("auth/register/",        RegisterView.as_view()),
-    path("auth/me/",              MeView.as_view()),
-    path("auth/change-password/", ChangePasswordView.as_view()),
+        rtbl = Table(rows, colWidths=[W * 0.42, W * 0.13, W * 0.13, W * 0.32])
+        rtbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0),  (-1, 0),  LGREEN),
+            ("ROWBACKGROUNDS",(0, 1),  (-1, -1), [WHITE, ROW_ALT]),
+            ("BOX",           (0, 0),  (-1, -1), 0.6, BORDER),
+            ("GRID",          (0, 0),  (-1, -1), 0.3, colors.HexColor("#e5e7eb")),
+            ("TOPPADDING",    (0, 0),  (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0),  (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0),  (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0),  (-1, -1), 6),
+        ]))
+        elements.append(rtbl)
+        elements.append(Spacer(1, 5 * mm))
 
-    # ── Dashboard ─────────────────────────────────────────────────────────────
-    path("dashboard/", DashboardView.as_view()),
+        # ── Footer ────────────────────────────────────────────────────────────
+        elements.append(HRFlowable(width="100%", thickness=0.4, color=colors.HexColor("#e5e7eb")))
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(para(
+            f"Report generated: {timezone.now().strftime('%d %b %Y  %I:%M %p')}",
+            7, color=LGRAY, align=TA_CENTER,
+        ))
+        elements.append(para("Top Ridge School — Centre of Distinction", 7, color=LGRAY, align=TA_CENTER))
 
-    # ── Accounts ──────────────────────────────────────────────────────────────
-    path("accounts/dashboard/",   AccountsDashboardView.as_view()),
-    path("accounts/ledger/",      IncomeLedgerView.as_view()),
-    path("accounts/collection/",  FeeCollectionReportView.as_view()),
-    path("accounts/defaulters/",  DefaultersListView.as_view()),
-    path("accounts/active-users/", ActiveUsersView.as_view()),
-]
+        pdf.build(elements)
+        pdf_data = buffer.getvalue()
+        buffer.close()
+
+        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", student.full_name.strip()).strip("_")
+        filename  = f"report_{safe_name}_{term_label.replace(' ', '_')}.pdf"
+
+        response = HttpResponse(pdf_data, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quote(filename)}'
+        )
+        return response
