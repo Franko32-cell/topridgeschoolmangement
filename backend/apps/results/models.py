@@ -19,9 +19,14 @@ TERM_CHOICES = (
 # ---------------------------------------------------------------------------
 
 class Result(models.Model):
-    student      = models.ForeignKey(Student,     on_delete=models.CASCADE, related_name="results")
-    subject      = models.ForeignKey(Subject,     on_delete=models.CASCADE, related_name="results")
-    school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, null=True, blank=True, related_name="results")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="results")
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="results")
+
+    # FIX: Removed school_class FK — it was never used in any query and its
+    # presence alongside student.school_class caused confusion.  The student's
+    # class is always available via student.school_class; storing it a second
+    # time on Result created a silent inconsistency risk.
+    # If you need class-scoped result queries, filter via student__school_class.
 
     term = models.CharField(max_length=10, choices=TERM_CHOICES)
     year = models.PositiveIntegerField(default=2025)
@@ -41,11 +46,13 @@ class Result(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        # year is now part of uniqueness — prevents term1 2024 and term1 2025
+        # from colliding and ensures cross-year filtering is safe.
         unique_together = ["student", "subject", "term", "year"]
-        ordering        = ["-created_at"]
+        ordering        = ["-year", "term", "subject__name"]
 
     def __str__(self):
-        return f"{self.student} – {self.subject} – {self.score}"
+        return f"{self.student} – {self.subject} – {self.term} {self.year} – {self.score}"
 
     def save(self, *args, **kwargs):
         self.score = round(self.ca + self.reopen + self.exams, 2)
@@ -67,10 +74,14 @@ class Report(models.Model):
         validators=[MinValueValidator(2000), MaxValueValidator(2100)],
     )
 
-    # Attendance is now derived from the Attendance model in the API view,
-    # but we keep these fields for any legacy / manual overrides.
+    # Attendance is derived from the Attendance model in the API view.
+    # These fields are kept for legacy / manual overrides only.
+    # FIX: Default attendance_total to 0 (not 1) so that before any real
+    # attendance is recorded, attendance_percent comes out as 0% (via the
+    # `if total_days else 0` guard in the view), not 0/1 = 0% with misleading
+    # denominator shown on the report card.
     attendance       = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
-    attendance_total = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
+    attendance_total = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
 
     # Teacher-editable fields — all appear on the printed report card
     conduct        = models.CharField(max_length=100, blank=True)   # e.g. "GOOD"
