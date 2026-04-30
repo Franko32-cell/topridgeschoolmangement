@@ -55,7 +55,7 @@ router.register(r"announcements", AnnouncementViewSet, basename="announcement")
 router.register(r"admissions",    AdmissionViewSet,    basename="admission")
 router.register(r"fees",          FeeViewSet,          basename="fee")
 router.register(r"results",       ResultViewSet,       basename="result")
-router.register(r"auth/approvals",AdminApprovalViewSet,basename="approval")
+router.register("admin-approvals", AdminApprovalViewSet, basename="approval")
 
 urlpatterns = [
     # ── Router URLs ───────────────────────────────────────────────────────────
