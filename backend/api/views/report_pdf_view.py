@@ -1,3 +1,9 @@
+"""
+api/views/report_pdf_view.py
+GET /api/report/student/<id>/pdf/?term=term1&year=2026
+Generates a PDF report card that matches the Top Ridge School printed format.
+"""
+
 from io import BytesIO
 import os
 from urllib.parse import quote
@@ -10,11 +16,11 @@ from django.utils import timezone
 
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph,
-    Spacer, HRFlowable, Image,
+    Spacer, HRFlowable, Image, KeepTogether,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A5
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
@@ -23,37 +29,37 @@ from PIL import Image as PilImage, ImageOps
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
-import requests
+import requests as http_requests
 
-from apps.fees.models import Fee, PaymentTransaction
 from apps.students.models import Student
+from apps.results.models import Result, Report
 
 
 # ---------------------------------------------------------------------------
-# Brand colours — Top Ridge School green palette
+# Brand colours
 # ---------------------------------------------------------------------------
-
-GREEN      = colors.HexColor("#16a34a")   # primary brand green
-DGREEN     = colors.HexColor("#15803d")   # darker green for headings
-LGREEN     = colors.HexColor("#dcfce7")   # light green tint
-DGRAY      = colors.HexColor("#374151")
-LGRAY      = colors.HexColor("#9ca3af")
-WHITE      = colors.white
-RED        = colors.HexColor("#dc2626")
-LRED       = colors.HexColor("#fef2f2")
-BLACK      = colors.HexColor("#111827")
-OFFWHITE   = colors.HexColor("#f9fafb")
-BORDER     = colors.HexColor("#d1d5db")
-ROW_ALT    = colors.HexColor("#f0fdf4")   # alternating row tint
+GREEN    = colors.HexColor("#16a34a")
+DGREEN   = colors.HexColor("#15803d")
+LGREEN   = colors.HexColor("#dcfce7")
+DGRAY    = colors.HexColor("#374151")
+LGRAY    = colors.HexColor("#9ca3af")
+WHITE    = colors.white
+RED      = colors.HexColor("#dc2626")
+BLACK    = colors.HexColor("#111827")
+OFFWHITE = colors.HexColor("#f9fafb")
+BORDER   = colors.HexColor("#d1d5db")
+ROW_ALT  = colors.HexColor("#f0fdf4")
+GOLD     = colors.HexColor("#ca8a04")
 
 TERM_LABELS = {"term1": "Term 1", "term2": "Term 2", "term3": "Term 3"}
 LOGO_PATH   = os.path.join(settings.BASE_DIR, "static", "images", "logo.jpeg")
 
-W = A5[0] - 24 * mm   # usable width on A5 with 12 mm margins each side
+# A4 with 15mm margins
+PAGE_W = A4[0] - 30 * mm
 
 
 # ---------------------------------------------------------------------------
-# Paragraph helper
+# Helpers
 # ---------------------------------------------------------------------------
 
 def para(text, size=9, bold=False, color=DGRAY, align=TA_LEFT):
@@ -64,9 +70,53 @@ def para(text, size=9, bold=False, color=DGRAY, align=TA_LEFT):
         fontName="Helvetica-Bold" if bold else "Helvetica",
         textColor=color,
         alignment=align,
-        leading=size + 4,
+        leading=size + 3,
         spaceAfter=0,
     ))
+
+
+def get_grade_b79(score):
+    if score >= 90: return "1", "Excellent"
+    if score >= 80: return "2", "Very Good"
+    if score >= 70: return "3", "Good"
+    if score >= 60: return "4", "High Average"
+    if score >= 55: return "5", "Average"
+    if score >= 50: return "6", "Low Average"
+    if score >= 45: return "7", "Low"
+    if score >= 40: return "6", "Lower"
+    return "9", "Lowest"
+
+
+def get_grade_b16(score):
+    if score >= 90: return "A",  "Excellent"
+    if score >= 80: return "B1", "Very Good"
+    if score >= 70: return "B2", "Good"
+    if score >= 60: return "C1", "High Average"
+    if score >= 55: return "C2", "Average"
+    if score >= 50: return "D1", "Low Average"
+    if score >= 45: return "D2", "Low"
+    if score >= 40: return "E1", "Lower"
+    return "E2", "Lowest"
+
+
+def class_level(school_class):
+    if not school_class:
+        return "basic_1_6"
+    name = school_class.name.lower()
+    for marker in ("basic 7", "basic 8", "basic 9", "b7", "b8", "b9"):
+        if marker in name:
+            return "basic_7_9"
+    return "basic_1_6"
+
+
+def ordinal(n):
+    if n is None:
+        return "—"
+    n = int(n)
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(
+        n % 10 if n % 100 not in (11, 12, 13) else 0, "th"
+    )
+    return f"{n}{suffix}"
 
 
 # ---------------------------------------------------------------------------
@@ -76,13 +126,13 @@ def para(text, size=9, bold=False, color=DGRAY, align=TA_LEFT):
 def load_logo():
     try:
         if os.path.exists(LOGO_PATH):
-            return Image(LOGO_PATH, width=16 * mm, height=16 * mm)
+            return Image(LOGO_PATH, width=20 * mm, height=20 * mm)
     except Exception:
         pass
     return None
 
 
-def load_student_photo(student, size=18 * mm):
+def load_student_photo(student, size=24 * mm):
     try:
         if not student.photo:
             return None
@@ -94,7 +144,7 @@ def load_student_photo(student, size=18 * mm):
             with open(path, "rb") as f:
                 img_bytes = BytesIO(f.read())
         else:
-            resp = requests.get(photo_url, timeout=5, stream=True)
+            resp = http_requests.get(photo_url, timeout=5, stream=True)
             resp.raise_for_status()
             img_bytes = BytesIO()
             for chunk in resp.iter_content(chunk_size=8192):
@@ -103,270 +153,409 @@ def load_student_photo(student, size=18 * mm):
 
         pil_img = PilImage.open(img_bytes)
         pil_img = ImageOps.exif_transpose(pil_img)
-
-        target_px = int(size * 3.78)
-        pil_img.thumbnail((target_px, target_px), PilImage.LANCZOS)
-
+        px = int(size * 3.78)
+        pil_img.thumbnail((px, px), PilImage.LANCZOS)
         if pil_img.mode in ("RGBA", "P", "CMYK", "LA", "L"):
             pil_img = pil_img.convert("RGB")
-
-        corrected = BytesIO()
-        pil_img.save(corrected, format="JPEG", quality=75, optimize=True)
-        corrected.seek(0)
+        out = BytesIO()
+        pil_img.save(out, format="JPEG", quality=80, optimize=True)
+        out.seek(0)
         pil_img.close()
-        return Image(corrected, width=size, height=size)
-
+        return Image(out, width=size, height=size)
     except Exception:
         pass
     return None
 
 
 # ---------------------------------------------------------------------------
-# Receipt PDF View
+# Grade colour helper for PDF cells
 # ---------------------------------------------------------------------------
 
-class PaymentReceiptPDFView(APIView):
+def grade_color(grade):
+    """Return (text_color, bg_color) for a grade string."""
+    mapping = {
+        "1":  (colors.HexColor("#166534"), colors.HexColor("#dcfce7")),
+        "A":  (colors.HexColor("#166534"), colors.HexColor("#dcfce7")),
+        "2":  (colors.HexColor("#065f46"), colors.HexColor("#d1fae5")),
+        "B1": (colors.HexColor("#065f46"), colors.HexColor("#d1fae5")),
+        "3":  (colors.HexColor("#0369a1"), colors.HexColor("#e0f2fe")),
+        "B2": (colors.HexColor("#0369a1"), colors.HexColor("#e0f2fe")),
+        "4":  (colors.HexColor("#1e40af"), colors.HexColor("#dbeafe")),
+        "C1": (colors.HexColor("#1e40af"), colors.HexColor("#dbeafe")),
+        "5":  (colors.HexColor("#92400e"), colors.HexColor("#fef3c7")),
+        "C2": (colors.HexColor("#92400e"), colors.HexColor("#fef3c7")),
+        "6":  (colors.HexColor("#9a3412"), colors.HexColor("#ffedd5")),
+        "D1": (colors.HexColor("#9a3412"), colors.HexColor("#ffedd5")),
+        "7":  (colors.HexColor("#991b1b"), colors.HexColor("#fee2e2")),
+        "D2": (colors.HexColor("#991b1b"), colors.HexColor("#fee2e2")),
+        "9":  (colors.HexColor("#7f1d1d"), colors.HexColor("#fecaca")),
+        "E1": (colors.HexColor("#7f1d1d"), colors.HexColor("#fecaca")),
+        "E2": (colors.HexColor("#7f1d1d"), colors.HexColor("#fecaca")),
+    }
+    return mapping.get(grade, (DGRAY, WHITE))
+
+
+# ---------------------------------------------------------------------------
+# PDF View
+# ---------------------------------------------------------------------------
+
+class StudentReportPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, transaction_id):
-        txn     = get_object_or_404(PaymentTransaction, id=transaction_id)
-        fee     = txn.fee
-        student = fee.student
+    def get(self, request, student_id):
+        student = get_object_or_404(Student, id=student_id)
+        term    = request.query_params.get("term", "term1")
+        year    = int(request.query_params.get("year", timezone.now().year))
 
+        results = (
+            Result.objects
+            .filter(student=student, term=term, year=year)
+            .select_related("subject")
+            .order_by("subject__name")
+        )
+
+        if not results.exists():
+            return HttpResponse("No results found for this student and term.", status=404)
+
+        report_obj, _ = Report.objects.get_or_create(
+            student=student, term=term, year=year,
+        )
+
+        school_class = student.school_class
+        level        = class_level(school_class)
+        grade_fn     = get_grade_b79 if level == "basic_7_9" else get_grade_b16
+        show_position = level == "basic_7_9"
+
+        # ── Attendance ────────────────────────────────────────────────────────
+        try:
+            from apps.attendance.models import Attendance
+            att_qs      = Attendance.objects.filter(student=student, term=term, year=year)
+            att_total   = att_qs.count()
+            att_present = att_qs.filter(status="present").count()
+        except Exception:
+            att_total   = report_obj.attendance_total
+            att_present = report_obj.attendance
+
+        # ── Number on roll ────────────────────────────────────────────────────
+        number_on_roll = (
+            Result.objects
+            .filter(term=term, year=year, student__school_class=school_class)
+            .values("student").distinct().count()
+        )
+
+        # ── Scores ────────────────────────────────────────────────────────────
+        subjects_data = []
+        total_score   = 0
+        for r in results:
+            grade, remark = grade_fn(r.score)
+            subjects_data.append({
+                "subject":          r.subject.name,
+                "ca":               r.ca,
+                "reopen":           r.reopen,
+                "exams":            r.exams,
+                "score":            r.score,
+                "grade":            grade,
+                "remark":           remark,
+                "subject_position": r.subject_position,
+            })
+            total_score += r.score
+
+        subject_count = len(subjects_data)
+        average_score = round(total_score / subject_count, 2) if subject_count else 0
+
+        # ── Overall position ──────────────────────────────────────────────────
+        position = None
+        if show_position:
+            from django.db.models import Sum as DSum
+            peer_scores = (
+                Result.objects
+                .filter(term=term, year=year, student__school_class=school_class)
+                .values("student")
+                .annotate(total=DSum("score"))
+                .order_by("-total")
+            )
+            for rank, row in enumerate(peer_scores, start=1):
+                if row["student"] == student.id:
+                    position = rank
+                    break
+
+        # ── Dates ─────────────────────────────────────────────────────────────
+        vacation_date   = report_obj.vacation_date.strftime("%-d %B, %Y").upper()   if report_obj.vacation_date   else "—"
+        resumption_date = report_obj.resumption_date.strftime("%-d %B, %Y").upper() if report_obj.resumption_date else "—"
+
+        # ── Overall grade ─────────────────────────────────────────────────────
+        overall_grade, _ = grade_fn(average_score)
+
+        # ── Build PDF ─────────────────────────────────────────────────────────
         buffer = BytesIO()
-        pdf    = SimpleDocTemplate(
+        pdf = SimpleDocTemplate(
             buffer,
-            pagesize=A5,
-            leftMargin=12 * mm,
-            rightMargin=12 * mm,
+            pagesize=A4,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
             topMargin=12 * mm,
             bottomMargin=12 * mm,
         )
         elements = []
 
-        # ── Header ────────────────────────────────────────────────────────────
-        logo      = load_logo()
-        logo_cell = logo if logo else para("", 9)
+        # ── HEADER ────────────────────────────────────────────────────────────
+        logo        = load_logo()
+        logo_cell   = logo if logo else para("", 9)
+        photo       = load_student_photo(student, size=24 * mm)
+        photo_cell  = photo if photo else para("", 9)
 
         school_block = [
-            para("TOP RIDGE SCHOOL",     12, bold=True, color=DGREEN, align=TA_CENTER),
-            para("CENTRE OF DISTINCTION", 7, color=LGRAY,             align=TA_CENTER),
+            para("TOP RIDGE SCHOOL",      16, bold=True, color=DGREEN,  align=TA_CENTER),
+            para("CENTRE OF DISTINCTION",  9, bold=True, color=GREEN,   align=TA_CENTER),
             Spacer(1, 1 * mm),
-            para("PAYMENT RECEIPT",      10, bold=True, color=BLACK,  align=TA_CENTER),
+            para("P.O BOX OD 292, Odorkor-Accra", 8, color=DGRAY,      align=TA_CENTER),
+            para("Location: Sanat-Maria Off the Kwashieman Motor way Highway. TEL: 027-1591-079",
+                 7, color=LGRAY, align=TA_CENTER),
+            Spacer(1, 2 * mm),
+            para("STUDENTS TERMINAL REPORT", 11, bold=True, color=BLACK, align=TA_CENTER),
         ]
 
         header = Table(
-            [[logo_cell, school_block, para("", 9)]],
-            colWidths=[18 * mm, W - 36 * mm, 18 * mm],
+            [[logo_cell, school_block, photo_cell]],
+            colWidths=[24 * mm, PAGE_W - 50 * mm, 26 * mm],
         )
         header.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), LGREEN),
             ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ("LEFTPADDING",   (0, 0), (0,  0),  5),
-            ("BOX",           (0, 0), (-1, -1), 0, DGREEN),
+            ("ALIGN",         (2, 0), (2,  0),  "RIGHT"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LINEBELOW",     (0, 0), (-1, -1), 1.5, DGREEN),
         ]))
         elements.append(header)
         elements.append(Spacer(1, 4 * mm))
 
-        # ── Receipt meta ──────────────────────────────────────────────────────
-        receipt_no   = f"RCP-{txn.id:06d}"
-        receipt_date = txn.created_at.strftime("%d %b %Y  %I:%M %p")
+        # ── STUDENT INFO BLOCK ────────────────────────────────────────────────
+        class_name  = school_class.name if school_class else "—"
+        term_label  = TERM_LABELS.get(term, term)
+        overall_tc, overall_bc = grade_color(overall_grade)
 
-        meta = Table([[
-            para(f"Receipt No: {receipt_no}", 8, bold=True, color=DGREEN),
-            para(f"Date: {receipt_date}",     8, color=DGRAY, align=TA_RIGHT),
-        ]], colWidths=[W / 2, W / 2])
-        meta.setStyle(TableStyle([
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        elements.append(meta)
-        elements.append(Spacer(1, 3 * mm))
-
-        # ── Student info + photo ──────────────────────────────────────────────
-        class_name = student.school_class.name if student.school_class else "—"
-        term_label = TERM_LABELS.get(fee.term, fee.term)
-
-        photo      = load_student_photo(student, size=18 * mm)
-        photo_cell = photo if photo else para("", 9)
-
-        def info_row(label, value):
+        def info_cell(label, value, bold_value=False):
             return [
                 para(label, 8, bold=True, color=DGREEN),
-                para(value, 8, color=BLACK),
+                para(str(value), 8, bold=bold_value, color=BLACK),
             ]
 
-        info = Table([
-            info_row("Student",      student.full_name),
-            info_row("Admission No", student.admission_number),
-            info_row("Class",        class_name),
-            info_row("Term",         term_label),
-        ], colWidths=[28 * mm, W - 28 * mm - 22 * mm])
-        info.setStyle(TableStyle([
-            ("TOPPADDING",    (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
-            ("LINEBELOW",     (0, 0), (-1, -2), 0.3, colors.HexColor("#e5e7eb")),
-        ]))
-
-        photo_wrapper = Table([[photo_cell]], colWidths=[20 * mm])
-        photo_wrapper.setStyle(TableStyle([
-            ("BOX",           (0, 0), (-1, -1), 1.2, DGREEN),
-            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("BACKGROUND",    (0, 0), (-1, -1), LGREEN),
-        ]))
-
-        student_card = Table(
-            [[info, photo_wrapper]],
-            colWidths=[W - 22 * mm, 22 * mm],
-        )
-        student_card.setStyle(TableStyle([
-            ("BOX",           (0, 0), (-1, -1), 0.6, BORDER),
-            ("BACKGROUND",    (0, 0), (-1, -1), OFFWHITE),
-            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-            ("TOPPADDING",    (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(student_card)
-        elements.append(Spacer(1, 4 * mm))
-
-        # ── Payment breakdown ─────────────────────────────────────────────────
-        elements.append(para("Payment Details", 9, bold=True, color=DGREEN))
-        elements.append(Spacer(1, 2 * mm))
-
-        breakdown_rows = [
+        info_rows = [
             [
-                para("Description",   8, bold=True, color=DGREEN),
-                para("Amount (GHS)",  8, bold=True, color=DGREEN, align=TA_RIGHT),
+                para("Name :", 8, bold=True, color=DGREEN),
+                para(student.full_name.upper(), 9, bold=True, color=BLACK),
+                para("Number on roll", 8, bold=True, color=DGREEN),
+                para(str(number_on_roll), 8, color=BLACK),
             ],
-            [para("School Fees", 8), para(f"{float(fee.amount):,.2f}", 8, align=TA_RIGHT)],
+            [
+                para("Basic :", 8, bold=True, color=DGREEN),
+                para(class_name, 8, color=BLACK),
+                para("Total Score :", 8, bold=True, color=DGREEN),
+                para(f"{total_score:.2f}", 8, bold=True, color=BLACK),
+            ],
+            [
+                para("Average Score", 8, bold=True, color=RED),
+                para(f"{average_score:.2f}", 8, bold=True, color=RED),
+                para("TOTAL:", 8, bold=True, color=BLACK),
+                para(f"{total_score:.2f}    School Re-opens On: {resumption_date}", 8, color=BLACK),
+            ],
+            [
+                para("School Vacates On:", 8, bold=True, color=BLACK),
+                para(vacation_date, 8, color=BLACK),
+                para("Term :", 8, bold=True, color=DGREEN),
+                para(term_label.upper(), 8, bold=True, color=BLACK),
+            ],
         ]
 
-        if float(fee.book_user_fee) > 0:
-            breakdown_rows.append([
-                para("Book User Fee", 8),
-                para(f"{float(fee.book_user_fee):,.2f}", 8, align=TA_RIGHT),
-            ])
-        if float(fee.workbook_fee) > 0:
-            breakdown_rows.append([
-                para("Workbook Fee", 8),
-                para(f"{float(fee.workbook_fee):,.2f}", 8, align=TA_RIGHT),
-            ])
-        if float(fee.arrears) > 0:
-            breakdown_rows.append([
-                para("Arrears", 8, color=RED),
-                para(f"{float(fee.arrears):,.2f}", 8, color=RED, align=TA_RIGHT),
-            ])
-
-        # Blank spacer row before totals
-        breakdown_rows.append([para("", 3), para("", 3)])
-        divider = len(breakdown_rows)
-
-        breakdown_rows.append([
-            para("Total Fee Due",             9, bold=True, color=BLACK),
-            para(f"{float(fee.total_amount):,.2f}", 9, bold=True, color=BLACK, align=TA_RIGHT),
+        info_tbl = Table(info_rows, colWidths=[
+            32 * mm, PAGE_W / 2 - 32 * mm,
+            32 * mm, PAGE_W / 2 - 32 * mm,
         ])
-        breakdown_rows.append([
-            para("Amount Paid (this receipt)", 9, bold=True, color=GREEN),
-            para(f"{float(txn.amount):,.2f}",  9, bold=True, color=GREEN, align=TA_RIGHT),
-        ])
-
-        balance       = float(fee.balance)
-        balance_color = GREEN if balance <= 0 else RED
-        balance_bg    = LGREEN if balance <= 0 else LRED
-        breakdown_rows.append([
-            para("Outstanding Balance",  9, bold=True, color=balance_color),
-            para(f"{balance:,.2f}",      9, bold=True, color=balance_color, align=TA_RIGHT),
-        ])
-
-        btbl = Table(breakdown_rows, colWidths=[W - 40 * mm, 40 * mm])
-        btbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0),  (-1, 0),              LGREEN),
-            ("ROWBACKGROUNDS",(0, 1),  (-1, divider - 1),    [WHITE, ROW_ALT]),
-            ("BACKGROUND",    (0, divider), (-1, -1),        colors.HexColor("#f0fdf4")),
-            ("LINEABOVE",     (0, divider), (-1, divider),   0.8, DGREEN),
-            ("BACKGROUND",    (0, -1), (-1, -1),              balance_bg),
-            ("TOPPADDING",    (0, 0),  (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0),  (-1, -1), 4),
-            ("LEFTPADDING",   (0, 0),  (-1, -1), 6),
-            ("RIGHTPADDING",  (0, 0),  (-1, -1), 6),
-            ("BOX",           (0, 0),  (-1, -1), 0.6, BORDER),
-            ("GRID",          (0, 0),  (-1, divider - 1), 0.3, colors.HexColor("#e5e7eb")),
+        info_tbl.setStyle(TableStyle([
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("LINEBELOW",     (0, 0), (-1, -1), 0.3, colors.HexColor("#e5e7eb")),
+            ("LINEBELOW",     (0, -1), (-1, -1), 1, DGREEN),
         ]))
-        elements.append(btbl)
+        elements.append(info_tbl)
+        elements.append(Spacer(1, 4 * mm))
+
+        # ── SUBJECT TABLE ─────────────────────────────────────────────────────
+        col_subject  = 52 * mm
+        col_ca       = 18 * mm
+        col_reopen   = 22 * mm
+        col_exams    = 20 * mm
+        col_total    = 18 * mm
+        col_grade    = 14 * mm
+        col_position = 18 * mm if show_position else 0
+        col_remark   = PAGE_W - col_subject - col_ca - col_reopen - col_exams - col_total - col_grade - col_position
+
+        # Header row
+        header_row = [
+            para("SUBJECT",                    7, bold=True, color=WHITE, align=TA_CENTER),
+            para("CLASS\nSC.\n(40%)",          7, bold=True, color=WHITE, align=TA_CENTER),
+            para("READING\nAND REOPEN\n.(20%)", 7, bold=True, color=WHITE, align=TA_CENTER),
+            para("EXAMS\nSCORE\n(40%)",        7, bold=True, color=WHITE, align=TA_CENTER),
+            para("TOTAL\n(100%)",              7, bold=True, color=WHITE, align=TA_CENTER),
+            para("GRADE",                      7, bold=True, color=WHITE, align=TA_CENTER),
+        ]
+        if show_position:
+            header_row.append(para("POSITION", 7, bold=True, color=WHITE, align=TA_CENTER))
+        header_row.append(para("REMARK", 7, bold=True, color=WHITE, align=TA_CENTER))
+
+        col_widths = [col_subject, col_ca, col_reopen, col_exams, col_total, col_grade]
+        if show_position:
+            col_widths.append(col_position)
+        col_widths.append(col_remark)
+
+        rows = [header_row]
+
+        for i, s in enumerate(subjects_data):
+            gc_text, gc_bg = grade_color(s["grade"])
+            row = [
+                para(s["subject"],                      8, bold=True,  color=BLACK),
+                para(f"{s['ca']}",                      8,             color=DGRAY,  align=TA_CENTER),
+                para(f"{s['reopen']}",                  8,             color=DGRAY,  align=TA_CENTER),
+                para(f"{s['exams']}",                   8,             color=DGRAY,  align=TA_CENTER),
+                para(f"{s['score']}",                   8, bold=True,  color=DGREEN, align=TA_CENTER),
+                para(s["grade"],                        8, bold=True,  color=gc_text, align=TA_CENTER),
+            ]
+            if show_position:
+                pos = s["subject_position"]
+                row.append(para(str(pos) if pos else "—", 8, bold=True, color=DGREEN, align=TA_CENTER))
+            row.append(para(s["remark"].upper(),        8, bold=True,  color=gc_text, align=TA_CENTER))
+            rows.append(row)
+
+        # Empty spacer row
+        empty_row = [para("", 6)] * len(col_widths)
+        rows.append(empty_row)
+
+        subj_tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+
+        tbl_style = [
+            # Header
+            ("BACKGROUND",    (0, 0), (-1, 0),  DGREEN),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
+            # Subject column left-align
+            ("ALIGN",         (0, 1), (0, -1),  "LEFT"),
+            # Alternating rows
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [WHITE, ROW_ALT]),
+            # Grid
+            ("GRID",          (0, 0), (-1, -1), 0.4, colors.HexColor("#d1d5db")),
+            ("LINEBELOW",     (0, 0), (-1, 0),  1.0, DGREEN),
+            ("BOX",           (0, 0), (-1, -1), 1.0, DGREEN),
+        ]
+
+        # Colour grade cells per row
+        for i, s in enumerate(subjects_data, start=1):
+            _, gc_bg = grade_color(s["grade"])
+            grade_col = 5
+            subj_tbl.setStyle(TableStyle([("BACKGROUND", (grade_col, i), (grade_col, i), gc_bg)]))
+
+        subj_tbl.setStyle(TableStyle(tbl_style))
+        elements.append(subj_tbl)
+        elements.append(Spacer(1, 4 * mm))
+
+        # ── ATTENDANCE + REMARKS ──────────────────────────────────────────────
+        att_text = f"{att_present}   OUT OF:   {att_total}"
+
+        remarks_rows = [
+            [
+                para("TOTAL ATTENDANCE :", 8, bold=True, color=BLACK),
+                para(att_text, 8, bold=True, color=DGREEN),
+                para("PROMOTED TO :", 8, bold=True, color=BLACK),
+                para(report_obj.promoted_to or "", 8, color=BLACK),
+            ],
+            [
+                para("CLASS TEACHER\nREMARKS:", 8, bold=True, color=BLACK),
+                para(report_obj.teacher_remark.upper() if report_obj.teacher_remark else "", 8, bold=True, color=BLACK),
+                para("", 8),
+                para("", 8),
+            ],
+            [
+                para("ATTITUDE :", 8, bold=True, color=BLACK),
+                para(report_obj.attitude.upper() if report_obj.attitude else "", 8, color=BLACK),
+                para("", 8),
+                para("", 8),
+            ],
+            [
+                para("CONDUCT:", 8, bold=True, color=BLACK),
+                para(report_obj.conduct.upper() if report_obj.conduct else "", 8, color=BLACK),
+                para("TEACHER'S SIGNATURE", 8, bold=True, color=BLACK),
+                para("", 8),
+            ],
+            [
+                para("INTEREST:", 8, bold=True, color=BLACK),
+                para(report_obj.interest.upper() if report_obj.interest else "", 8, color=BLACK),
+                para("", 8),
+                para("", 8),
+            ],
+        ]
+
+        remarks_tbl = Table(remarks_rows, colWidths=[
+            36 * mm, PAGE_W / 2 - 36 * mm,
+            36 * mm, PAGE_W / 2 - 36 * mm,
+        ])
+        remarks_tbl.setStyle(TableStyle([
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("LINEBELOW",     (0, 0), (-1, -2), 0.3, colors.HexColor("#e5e7eb")),
+            ("BOX",           (0, 0), (-1, -1), 0.6, BORDER),
+            ("BACKGROUND",    (0, 0), (-1, -1), OFFWHITE),
+            # Underline signature area
+            ("LINEBELOW",     (3, 3), (3, 3), 0.8, BLACK),
+            # Underline interest area
+            ("LINEBELOW",     (1, 4), (1, 4), 0.8, BLACK),
+        ]))
+        elements.append(remarks_tbl)
         elements.append(Spacer(1, 5 * mm))
 
-        # ── Payment note ──────────────────────────────────────────────────────
-        if txn.note:
-            note_tbl = Table(
-                [[para(f"Note: {txn.note}", 8, color=DGRAY)]],
-                colWidths=[W],
+        # ── GRADING KEY ───────────────────────────────────────────────────────
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=DGREEN))
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(para("GRADING", 8, bold=True, color=DGREEN))
+        elements.append(Spacer(1, 1 * mm))
+
+        if level == "basic_7_9":
+            grade_text = (
+                "90 – 100  1  Excellent,  80 – 89  2  V. Good,  70 – 79  3  Good,  "
+                "60 – 69  4  High Average,  55 – 59  5  Average,  50 – 54  6  Low Average,  "
+                "45 – 49  7  Low,  40 – 44  6  Lower,  0 – 39  9  Lowest"
             )
-            note_tbl.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#fffbeb")),
-                ("BOX",           (0, 0), (-1, -1), 0.5, colors.HexColor("#fde68a")),
-                ("TOPPADDING",    (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 7),
-            ]))
-            elements.append(note_tbl)
-            elements.append(Spacer(1, 4 * mm))
+        else:
+            grade_text = (
+                "90 – 100  A  Excellent,  80 – 89  B1  V. Good,  70 – 79  B2  Good,  "
+                "60 – 69  C1  High Average,  55 – 59  C2  Average,  50 – 54  D1  Low Average,  "
+                "45 – 49  D2  Low,  40 – 44  E1  Lower,  0 – 39  E2  Lowest"
+            )
 
-        # ── Recorded by ───────────────────────────────────────────────────────
-        recorded_by = "System"
-        if txn.recorded_by:
-            recorded_by = txn.recorded_by.get_full_name() or txn.recorded_by.username
-
-        elements.append(para(f"Received by: {recorded_by}", 8, color=LGRAY))
-        elements.append(Spacer(1, 5 * mm))
-
-        # ── Status stamp ──────────────────────────────────────────────────────
-        stamp_text  = "✓  PAYMENT RECEIVED" if balance <= 0 else "◑  PARTIAL PAYMENT"
-        stamp_color = GREEN                  if balance <= 0 else colors.HexColor("#d97706")
-        stamp_bg    = LGREEN                 if balance <= 0 else colors.HexColor("#fffbeb")
-
-        stamp = Table(
-            [[para(stamp_text, 11, bold=True, color=stamp_color, align=TA_CENTER)]],
-            colWidths=[W],
-        )
-        stamp.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), stamp_bg),
-            ("BOX",           (0, 0), (-1, -1), 1.5, stamp_color),
-            ("TOPPADDING",    (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(stamp)
-        elements.append(Spacer(1, 5 * mm))
+        elements.append(para(grade_text, 7, color=RED, align=TA_CENTER))
+        elements.append(Spacer(1, 3 * mm))
 
         # ── Footer ────────────────────────────────────────────────────────────
-        elements.append(HRFlowable(width="100%", thickness=0.4, color=colors.HexColor("#e5e7eb")))
-        elements.append(Spacer(1, 2 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.3, color=LGRAY))
+        elements.append(Spacer(1, 1 * mm))
         elements.append(para(
-            "This is an official receipt. Please retain for your records.",
-            7, color=LGRAY, align=TA_CENTER,
-        ))
-        elements.append(para(
-            "Thank you for your payment. — Top Ridge School",
+            "This is an official report card of Top Ridge School — Centre of Distinction.",
             7, color=LGRAY, align=TA_CENTER,
         ))
 
+        # ── Build ─────────────────────────────────────────────────────────────
         pdf.build(elements)
         pdf_data = buffer.getvalue()
         buffer.close()
 
-        name_slug = student.full_name.strip().replace(" ", "_")
-        if not name_slug:
-            name_slug = student.admission_number
-
-        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", name_slug).strip("_")
-        filename  = f"receipt_{receipt_no}_{safe_name}.pdf"
+        # ── Filename ──────────────────────────────────────────────────────────
+        safe = re.sub(r"[^A-Za-z0-9_-]+", "_", student.full_name.strip()).strip("_")
+        filename = f"report_{safe}_{term}_{year}.pdf"
 
         response = HttpResponse(pdf_data, content_type="application/pdf")
         response["Content-Disposition"] = (

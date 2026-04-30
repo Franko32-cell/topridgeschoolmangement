@@ -1,378 +1,257 @@
-from typing import Optional
+"""
+api/views/report_view.py
+GET  /api/report/student/<id>/          → JSON report data
+PATCH /api/report/student/<id>/         → save teacher remarks
+"""
 
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
 
-from django.db.models import Sum
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
-
-from apps.results.models import Result, Report
 from apps.students.models import Student
+from apps.results.models import Result, Report
 from apps.attendance.models import Attendance
 
 
 # ---------------------------------------------------------------------------
-# School info
+# Grading helpers
 # ---------------------------------------------------------------------------
 
-SCHOOL_NAME     = "TOP RIDGE SCHOOL"
-SCHOOL_MOTTO    = "CENTRE OF DISTINCTION"
-SCHOOL_ADDRESS  = "P.O BOX OD 292, Odorkor-Accra"
-SCHOOL_LOCATION = "Sanat-Maria Off the Kwashieman Motor way Highway."
-SCHOOL_TEL      = "027-1591-079"
-
-VALID_TERMS = {"term1", "term2", "term3"}
-
-
-# ---------------------------------------------------------------------------
-# Grading systems
-# ---------------------------------------------------------------------------
-
-# Basic 7–9 — numeric grades (1–9)
-#   FIX: 40–44 was incorrectly mapped to grade "6" (duplicate). Corrected to "8".
-GRADE_THRESHOLDS_B79 = [
-    (90, "1", "EXCELLENT"),
-    (80, "2", "VERY GOOD"),
-    (70, "3", "GOOD"),
-    (60, "4", "HIGH AVERAGE"),
-    (55, "5", "AVERAGE"),
-    (50, "6", "LOW AVERAGE"),
-    (45, "7", "LOW"),
-    (40, "8", "LOWER"),   # was "6" — duplicate grade bug fixed
-    (0,  "9", "LOWEST"),
-]
-
-# Basic 1–6 — letter grades
-GRADE_THRESHOLDS_B16 = [
-    (90, "A",  "EXCELLENT"),
-    (80, "B1", "VERY GOOD"),
-    (70, "B2", "GOOD"),
-    (60, "C1", "HIGH AVERAGE"),
-    (55, "C2", "AVERAGE"),
-    (50, "D1", "LOW AVERAGE"),
-    (45, "D2", "LOW"),
-    (40, "E1", "LOWER"),
-    (0,  "E2", "LOWEST"),
-]
-
-# Nursery / KG — same letter system as Basic 1–6
-GRADE_THRESHOLDS_NKG = GRADE_THRESHOLDS_B16
+def get_grade_b79(score):
+    """Numeric grade scale for Basic 7–9."""
+    if score >= 90: return "1", "Excellent"
+    if score >= 80: return "2", "Very Good"
+    if score >= 70: return "3", "Good"
+    if score >= 60: return "4", "High Average"
+    if score >= 55: return "5", "Average"
+    if score >= 50: return "6", "Low Average"
+    if score >= 45: return "7", "Low"
+    if score >= 40: return "6", "Lower"
+    return "9", "Lowest"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def get_grade_and_remark(score: float, thresholds: list) -> tuple:
-    """Return (grade, remark) for a given score using the supplied threshold table."""
-    for threshold, grade, remark in thresholds:
-        if score >= threshold:
-            return grade, remark
-    return thresholds[-1][1], thresholds[-1][2]
-
-
-def get_overall_grade(avg: float, thresholds: list) -> str:
-    return get_grade_and_remark(avg, thresholds)[0]
+def get_grade_b16(score):
+    """Letter grade scale for Basic 1–6 / KG."""
+    if score >= 90: return "A",  "Excellent"
+    if score >= 80: return "B1", "Very Good"
+    if score >= 70: return "B2", "Good"
+    if score >= 60: return "C1", "High Average"
+    if score >= 55: return "C2", "Average"
+    if score >= 50: return "D1", "Low Average"
+    if score >= 45: return "D2", "Low"
+    if score >= 40: return "E1", "Lower"
+    return "E2", "Lowest"
 
 
-def get_thresholds(level: str) -> list:
-    if level == "basic_1_6":
-        return GRADE_THRESHOLDS_B16
-    if level == "nursery_kg":
-        return GRADE_THRESHOLDS_NKG
-    return GRADE_THRESHOLDS_B79   # default: basic_7_9
+def get_overall_grade(score, level):
+    grade, _ = (get_grade_b79 if level == "basic_7_9" else get_grade_b16)(score)
+    return grade
 
 
-# FIX: Use Optional[int] instead of int | None for Python 3.9 compatibility.
-def format_position(n: Optional[int]) -> Optional[str]:
-    """Return ordinal string e.g. 1 → '1st', 3 → '3rd'."""
+def ordinal(n):
     if n is None:
         return None
-    suffix = (
-        "th" if 10 <= n % 100 <= 20
-        else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-    )
+    n = int(n)
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10 if n % 100 not in (11, 12, 13) else 0, "th")
     return f"{n}{suffix}"
 
 
-def get_grading_scale(level: str) -> list:
-    """
-    Return the grading scale list for the report footer.
-    Labels match exactly what is printed on the Top Ridge School report cards.
-    """
-    if level in ("basic_1_6", "nursery_kg"):
-        return [
-            {"range": "90 – 100", "grade": "A",  "remark": "Excellent"},
-            {"range": "80 – 89",  "grade": "B1", "remark": "Very Good"},
-            {"range": "70 – 79",  "grade": "B2", "remark": "Good"},
-            {"range": "60 – 69",  "grade": "C1", "remark": "High Average"},
-            {"range": "55 – 59",  "grade": "C2", "remark": "Average"},
-            {"range": "50 – 54",  "grade": "D1", "remark": "Low Average"},
-            {"range": "45 – 49",  "grade": "D2", "remark": "Low"},
-            {"range": "40 – 44",  "grade": "E1", "remark": "Lower"},
-            {"range": "0 – 39",   "grade": "E2", "remark": "Lowest"},
-        ]
-    # Basic 7–9 scale (matches Top Ridge School report card grading key)
-    return [
-        {"range": "90 – 100", "grade": "1", "remark": "Excellent"},
-        {"range": "80 – 89",  "grade": "2", "remark": "Very Good"},
-        {"range": "70 – 79",  "grade": "3", "remark": "Good"},
-        {"range": "60 – 69",  "grade": "4", "remark": "High Average"},
-        {"range": "55 – 59",  "grade": "5", "remark": "Average"},
-        {"range": "50 – 54",  "grade": "6", "remark": "Low Average"},
-        {"range": "45 – 49",  "grade": "7", "remark": "Low"},
-        {"range": "40 – 44",  "grade": "8", "remark": "Lower"},   # fixed from "6"
-        {"range": "0 – 39",   "grade": "9", "remark": "Lowest"},
-    ]
+# ---------------------------------------------------------------------------
+# Determine grading level from class name
+# ---------------------------------------------------------------------------
 
-
-def _current_year() -> int:
-    return timezone.now().year
-
-
-def _safe_photo_url(student) -> Optional[str]:
+def class_level(school_class):
     """
-    FIX: Cloudinary fields can be truthy even when empty (empty string).
-    Explicitly check the field has a name before calling .url to avoid ValueError.
+    Returns 'basic_7_9' or 'basic_1_6'.
+    Basic 7, 8, 9 → numeric grades; everything else → letter grades.
     """
-    try:
-        if student.photo and student.photo.name:
-            return student.photo.url
-    except Exception:
-        pass
-    return None
+    if not school_class:
+        return "basic_1_6"
+    name = school_class.name.lower()
+    for marker in ("basic 7", "basic 8", "basic 9", "b7", "b8", "b9", "7", "8", "9"):
+        if marker in name:
+            return "basic_7_9"
+    return "basic_1_6"
 
 
 # ---------------------------------------------------------------------------
-# Views
+# Report View
 # ---------------------------------------------------------------------------
 
 class StudentReportView(APIView):
     permission_classes = [IsAuthenticated]
 
-    # ── GET ──────────────────────────────────────────────────────────────────
-
     def get(self, request, student_id):
-        term = request.query_params.get("term")
-        if not term:
-            return Response({"error": "term is required"}, status=400)
-        # FIX: Validate term value to avoid silently returning empty/wrong data.
-        if term not in VALID_TERMS:
+        student = get_object_or_404(Student, id=student_id)
+        term    = request.query_params.get("term", "term1")
+        year    = int(request.query_params.get("year", timezone.now().year))
+
+        results = Result.objects.filter(
+            student=student, term=term, year=year
+        ).select_related("subject").order_by("subject__name")
+
+        if not results.exists():
             return Response(
-                {"error": f"term must be one of: {', '.join(sorted(VALID_TERMS))}"},
-                status=400,
+                {"detail": "No results found for this student and term."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        # FIX: Accept an explicit year param; fall back to current year.
-        # This keeps GET and PATCH consistent and avoids cross-year data mixing.
-        try:
-            year = int(request.query_params.get("year", _current_year()))
-        except ValueError:
-            return Response({"error": "year must be an integer"}, status=400)
-
-        student    = get_object_or_404(Student, id=student_id)
-        level      = getattr(student.school_class, "level", "basic_7_9") if student.school_class else "basic_7_9"
-        thresholds = get_thresholds(level)
-
-        # Nursery/KG reports use the Montessori rubric — positions not shown.
-        show_position = level != "nursery_kg"
-
-        # FIX: Filter by year to avoid mixing results across academic years.
-        results = (
-            Result.objects
-            .filter(student=student, term=term, year=year)
-            .select_related("subject")
-            .order_by("subject__name")
+        # ── Report record (remarks / dates) ───────────────────────────────────
+        report_obj, _ = Report.objects.get_or_create(
+            student=student, term=term, year=year,
         )
 
-        # FIX: Filter Report by year too.
-        report = Report.objects.filter(student=student, term=term, year=year).first()
+        # ── Attendance from Attendance model ──────────────────────────────────
+        try:
+            from apps.attendance.models import Attendance
+            att_qs      = Attendance.objects.filter(student=student, term=term, year=year)
+            att_total   = att_qs.count()
+            att_present = att_qs.filter(status="present").count()
+        except Exception:
+            att_total   = report_obj.attendance_total
+            att_present = report_obj.attendance
 
-        subjects    = []
-        total_score = 0.0
-        passed      = 0
-        failed      = 0
+        att_percent = round((att_present / att_total) * 100, 1) if att_total else 0
+
+        # ── Class + level ─────────────────────────────────────────────────────
+        school_class = student.school_class
+        level        = class_level(school_class)
+        grade_fn     = get_grade_b79 if level == "basic_7_9" else get_grade_b16
+
+        # ── Number on roll (students in same class + term with results) ────────
+        number_on_roll = (
+            Result.objects
+            .filter(term=term, year=year, student__school_class=school_class)
+            .values("student")
+            .distinct()
+            .count()
+        )
+
+        # ── Subject rows ──────────────────────────────────────────────────────
+        subjects_data = []
+        total_score   = 0
 
         for r in results:
-            score         = r.score or 0.0
-            grade, remark = get_grade_and_remark(score, thresholds)
-
-            subjects.append({
+            grade, remark = grade_fn(r.score)
+            subjects_data.append({
                 "subject":          r.subject.name,
-                # Column order matches the printed report: CLASS SC.(40%) | RE-OPEN(20%) | EXAMS(40%)
                 "class_score":      r.ca,
                 "reopen":           r.reopen,
                 "exams":            r.exams,
                 "score":            r.score,
                 "grade":            grade,
                 "remark":           remark,
-                "subject_position": r.subject_position if show_position else None,
+                "subject_position": r.subject_position,
             })
+            total_score += r.score
 
-            total_score += score
-            if score >= 50:
-                passed += 1
-            else:
-                failed += 1
+        subject_count = len(subjects_data)
+        average_score = round(total_score / subject_count, 2) if subject_count else 0
+        overall_grade = get_overall_grade(average_score, level)
 
-        subject_count = len(subjects)
-        average       = round(total_score / subject_count, 2) if subject_count else 0.0
-        overall_grade = get_overall_grade(average, thresholds)
+        # ── Overall class position ────────────────────────────────────────────
+        # Rank by total score among students in same class/term/year
+        from apps.results.models import Result as R
+        from django.db.models import Sum
 
-        # ── Attendance ───────────────────────────────────────────────────────
-        # FIX: Filter attendance by year as well.
-        term_attendance  = Attendance.objects.filter(student=student, term=term, year=year)
-        total_days       = term_attendance.count()
-        present_days     = term_attendance.filter(status__in=["present", "late"]).count()
-
-        # ── Class ranking ────────────────────────────────────────────────────
-        # FIX: Replace N+1 loop with a single aggregated query using annotate+Sum.
-        # Previously this fired one DB query per classmate — O(N) queries.
-        class_students   = Student.objects.filter(school_class=student.school_class)
-        number_on_roll   = class_students.count()
-
+        peer_scores = (
+            R.objects
+            .filter(term=term, year=year, student__school_class=school_class)
+            .values("student")
+            .annotate(total=Sum("score"))
+            .order_by("-total")
+        )
+        position      = None
+        show_position = level == "basic_7_9"   # only show position for B7-9
         if show_position:
-            student_totals = (
-                Result.objects
-                .filter(
-                    student__school_class=student.school_class,
-                    term=term,
-                    year=year,
-                )
-                .values("student_id")
-                .annotate(total=Sum("score"))
-                .order_by("-total")
-            )
+            for rank, row in enumerate(peer_scores, start=1):
+                if row["student"] == student.id:
+                    position = rank
+                    break
 
-            ranked = list(student_totals)
-            position = next(
-                (i + 1 for i, item in enumerate(ranked) if item["student_id"] == student.id),
-                None,
-            )
-            out_of = len(ranked)
-        else:
-            position = None
-            out_of   = None
+        # ── Photo URL ─────────────────────────────────────────────────────────
+        photo_url = None
+        if student.photo:
+            try:
+                photo_url = student.photo.url
+            except Exception:
+                pass
+
+        # ── Dates ─────────────────────────────────────────────────────────────
+        vacation_date   = report_obj.vacation_date.strftime("%d %b, %Y").upper()   if report_obj.vacation_date   else ""
+        resumption_date = report_obj.resumption_date.strftime("%d %b, %Y").upper() if report_obj.resumption_date else ""
 
         return Response({
-            # ── School info ─────────────────────────────────────────────────
-            "school_name":     SCHOOL_NAME,
-            "school_motto":    SCHOOL_MOTTO,
-            "school_address":  SCHOOL_ADDRESS,
-            "school_location": SCHOOL_LOCATION,
-            "school_tel":      SCHOOL_TEL,
+            # School info
+            "school_name":    "TOP RIDGE SCHOOL",
+            "school_motto":   "CENTRE OF DISTINCTION",
+            "school_address": "P.O BOX OD 292, Odorkor-Accra",
 
-            # ── Student info ────────────────────────────────────────────────
+            # Student info
             "student":          student.full_name,
             "admission_number": student.admission_number,
-            "class":            student.school_class.name if student.school_class else None,
-            "photo":            _safe_photo_url(student),  # FIX: safe Cloudinary URL
+            "class":            school_class.name if school_class else "—",
             "term":             term,
             "year":             year,
+            "photo":            photo_url,
             "level":            level,
-            "show_position":    show_position,
-            "number_on_roll":   number_on_roll,
 
-            # ── Results ──────────────────────────────────────────────────────
-            "subjects":        subjects,
-            "total_score":     round(total_score, 2),
-            "average_score":   average,
-            "overall_grade":   overall_grade,
-            "subjects_passed": passed,
-            "subjects_failed": failed,
+            # Scores
+            "subjects":       subjects_data,
+            "total_score":    round(total_score, 2),
+            "average_score":  average_score,
+            "overall_grade":  overall_grade,
 
-            # ── Class position ───────────────────────────────────────────────
+            # Position
+            "show_position":      show_position,
             "position":           position,
-            "position_formatted": format_position(position),
-            "out_of":             out_of,
+            "position_formatted": ordinal(position) if position else None,
+            "out_of":             number_on_roll,
+            "number_on_roll":     number_on_roll,
 
-            # ── Attendance ───────────────────────────────────────────────────
-            "attendance":         present_days,
-            "attendance_total":   total_days,
-            "attendance_percent": round((present_days / total_days) * 100) if total_days else 0,
+            # Attendance
+            "attendance":         att_present,
+            "attendance_total":   att_total,
+            "attendance_percent": att_percent,
 
-            # ── Teacher remarks ───────────────────────────────────────────────
-            "conduct":        report.conduct        if report else None,
-            "attitude":       report.attitude       if report else None,
-            "interest":       report.interest       if report else None,
-            "teacher_remark": report.teacher_remark if report else None,
-            "promoted_to":    report.promoted_to    if report else None,
+            # Remarks (editable)
+            "conduct":         report_obj.conduct,
+            "attitude":        report_obj.attitude,
+            "interest":        report_obj.interest,
+            "teacher_remark":  report_obj.teacher_remark,
+            "promoted_to":     report_obj.promoted_to,
+            "vacation_date":   report_obj.vacation_date.isoformat()   if report_obj.vacation_date   else "",
+            "resumption_date": report_obj.resumption_date.isoformat() if report_obj.resumption_date else "",
 
-            # ── Term dates ───────────────────────────────────────────────────
-            "vacation_date":   str(report.vacation_date)   if report and report.vacation_date   else None,
-            "resumption_date": str(report.resumption_date) if report and report.resumption_date else None,
-
-            # ── Grading scale (for footer) ───────────────────────────────────
-            "grading_scale": get_grading_scale(level),
+            # Formatted dates for display
+            "vacation_date_display":   vacation_date,
+            "resumption_date_display": resumption_date,
         })
-
-    # ── PATCH ─────────────────────────────────────────────────────────────────
 
     def patch(self, request, student_id):
-        term = request.data.get("term")
-        if not term:
-            return Response({"error": "term is required"}, status=400)
-        if term not in VALID_TERMS:
-            return Response(
-                {"error": f"term must be one of: {', '.join(sorted(VALID_TERMS))}"},
-                status=400,
-            )
-
-        # FIX: Accept explicit year in PATCH body, same as GET.
-        # Prevents cross-year mismatch when PATCH is called near year boundary.
-        try:
-            year = int(request.data.get("year", _current_year()))
-        except (TypeError, ValueError):
-            return Response({"error": "year must be an integer"}, status=400)
-
         student = get_object_or_404(Student, id=student_id)
+        term    = request.data.get("term", "term1")
+        year    = int(request.data.get("year", timezone.now().year))
 
-        report, _ = Report.objects.get_or_create(
-            student=student,
-            term=term,
-            year=year,
-            defaults={
-                # FIX: Use 0 for attendance_total default so the API-computed
-                # value is always authoritative; 1 was a silent footgun that
-                # made a student look like 0/1 attendance until corrected.
-                "attendance":       0,
-                "attendance_total": 0,
-            },
+        report_obj, _ = Report.objects.get_or_create(
+            student=student, term=term, year=year,
         )
 
-        # All teacher-editable fields — must match Report model fields exactly
-        updatable = [
-            "conduct",
-            "attitude",
-            "interest",
-            "teacher_remark",
-            "promoted_to",
-            "vacation_date",
-            "resumption_date",
+        fields = [
+            "conduct", "attitude", "interest",
+            "teacher_remark", "promoted_to",
+            "vacation_date", "resumption_date",
         ]
-        changed = []
-
-        for field in updatable:
+        for field in fields:
             if field in request.data:
-                value = request.data[field]
-                # Treat empty string as NULL for date fields
-                if field in ("vacation_date", "resumption_date") and value == "":
-                    value = None
-                setattr(report, field, value)
-                changed.append(field)
+                val = request.data[field]
+                # Allow clearing date fields with empty string
+                if field in ("vacation_date", "resumption_date") and val == "":
+                    val = None
+                setattr(report_obj, field, val)
 
-        if changed:
-            report.save(update_fields=changed)
-
-        return Response({
-            "detail":          "Saved.",
-            "conduct":         report.conduct,
-            "attitude":        report.attitude,
-            "interest":        report.interest,
-            "teacher_remark":  report.teacher_remark,
-            "promoted_to":     report.promoted_to,
-            "vacation_date":   str(report.vacation_date)   if report.vacation_date   else None,
-            "resumption_date": str(report.resumption_date) if report.resumption_date else None,
-        })
+        report_obj.save()
+        return Response({"detail": "Remarks saved."})
