@@ -24,6 +24,13 @@ class Admission(models.Model):
         ("Prefer not to say", "Prefer not to say"),
     ]
 
+    RELATIONSHIP_CHOICES = [
+        ("Father",   "Father"),
+        ("Mother",   "Mother"),
+        ("Guardian", "Guardian"),
+        ("Other",    "Other"),
+    ]
+
     # ── Identity ───────────────────────────────────────────────
     first_name   = models.CharField(max_length=100, blank=True, default="")
     last_name    = models.CharField(max_length=100, blank=True, default="")
@@ -56,16 +63,9 @@ class Admission(models.Model):
     health_notes  = models.TextField(blank=True, default="")
 
     # ── Parent / guardian ──────────────────────────────────────
-RELATIONSHIP_CHOICES = [
-    ("Father",   "Father"),
-    ("Mother",   "Mother"),
-    ("Guardian", "Guardian"),
-    ("Other",    "Other"),
-]
-
-parent_name         = models.CharField(max_length=100, blank=True, default="")
-parent_phone        = models.CharField(max_length=20,  blank=True, default="")
-relationship        = models.CharField(max_length=50,  blank=True, default="", choices=RELATIONSHIP_CHOICES)
+    parent_name  = models.CharField(max_length=100, blank=True, default="")
+    parent_phone = models.CharField(max_length=20,  blank=True, default="")
+    relationship = models.CharField(max_length=50,  blank=True, default="", choices=RELATIONSHIP_CHOICES)
 
     # ── Academic history ───────────────────────────────────────
     previous_school  = models.CharField(max_length=255, blank=True, default="")
