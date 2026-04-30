@@ -86,7 +86,7 @@ urlpatterns = [
          StudentReportView.as_view(),       name="student-report-pdf"),
     path("students/<int:student_id>/bill/pdf/",
          StudentFeeBillPDFView.as_view(),   name="student-bill-pdf"),
-    path("students/<int:student_id>/admission/pdf/",
+    path("admissions/<int:admission_id>/form/",
          AdmissionFormPDFView.as_view(),    name="admission-form-pdf"),
     path("fees/class-bill/pdf/",
          ClassFeeBillPDFView.as_view(),     name="class-bill-pdf"),
