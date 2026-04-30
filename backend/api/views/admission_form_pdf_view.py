@@ -486,10 +486,7 @@ def build_student_section(admission):
 def build_parent_section(admission):
     rows = [
         ("Parent / Guardian Name", admission.parent_name   or "—"),
-        ("Relationship",           admission.relationship  or "—"),
-        ("Gender",                 admission.parent_gender or "—"),
         ("Phone",                  admission.phone         or "—"),
-        ("Alt. Phone",             admission.alt_phone     or "—"),
         ("Email",                  admission.email         or "—"),
         ("Home Address",           admission.address       or "—"),
     ]
