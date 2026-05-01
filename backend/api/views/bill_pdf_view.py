@@ -22,7 +22,7 @@ import requests
 
 from apps.fees.models import Fee, PaymentTransaction
 from apps.students.models import Student
-from apps.classes.models import SchoolClass
+from apps.classes.models import SchoolClass  # FIX: was `Class`, correct model name is `SchoolClass`
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -329,9 +329,11 @@ class ClassFeeBillPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        class_id = request.query_params.get("class_id")
+        # FIX: accept both `class_id` and `school_class` so frontend and backend stay in sync
+        class_id = request.query_params.get("class_id") or request.query_params.get("school_class")
         term     = request.query_params.get("term")        # optional filter
 
+        # FIX: was `get_object_or_404(Class, ...)` — corrected to `SchoolClass`
         school_class = get_object_or_404(SchoolClass, id=class_id)
         students     = Student.objects.filter(school_class=school_class).order_by("full_name")
 
