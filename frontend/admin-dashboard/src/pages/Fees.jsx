@@ -33,7 +33,6 @@ const FEE_SCHEDULE = {
 };
 
 // Maps class name strings from the API to a schedule key for auto-fill lookup.
-// Adjust these matchers to match your actual class names in the database.
 const CLASS_NAME_TO_SCHEDULE_KEY = (name = "") => {
   const n = name.toLowerCase().trim();
   if (n.includes("lily"))        return "nursery-lily";
@@ -459,8 +458,9 @@ const Fees = () => {
       });
       setSuccess(`Done — ${res.data.created} created, ${res.data.updated} updated.`);
       setClassAssign({ ...emptyAssign }); fetchSummary();
+      // FIX: use `class_id` param to match ClassFeeBillPDFView's query_params.get("class_id")
       await downloadBill(
-        `/fees/bill/class/?school_class=${selectedClass}&term=${selectedTerm}&year=${selectedYear}`,
+        `/fees/bill/class/?class_id=${selectedClass}&term=${selectedTerm}`,
         `class_bill_${selectedTerm}_${selectedYear}.pdf`,
       );
     } catch (err) { setError(err.response?.data?.error || "Failed to assign fees."); }
@@ -481,11 +481,12 @@ const Fees = () => {
         arrears:       studentAssign.arrears       || 0,
       });
       setSuccess("Fee assigned successfully.");
-      const cap = selectedStudent;
+      // FIX: capture student ID before clearing state
+      const studentId = selectedStudent;
       setStudentAssign({ ...emptyAssign }); setSelectedStudent(""); fetchSummary();
       await downloadBill(
-        `/fees/bill/student/${cap}/?term=${selectedTerm}&year=${selectedYear}`,
-        `bill_${cap}_${selectedTerm}_${selectedYear}.pdf`,
+        `/fees/bill/student/${studentId}/?term=${selectedTerm}&year=${selectedYear}`,
+        `bill_${studentId}_${selectedTerm}_${selectedYear}.pdf`,
       );
     } catch (err) { setError(err.response?.data?.error || "Failed to assign fee."); }
     finally { setAssigningStudent(false); }
@@ -561,7 +562,6 @@ const Fees = () => {
                   {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </SelectField>
               )}
-              {/* Show matched schedule badge in filter bar */}
               {scheduleKey && tab !== "Fee Records" && (
                 <div className="flex items-center gap-1.5 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 font-medium">
                   <span>📋</span>
@@ -730,10 +730,11 @@ const Fees = () => {
                   <option value="">Select Class</option>
                   {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </SelectField>
+                {/* FIX: use full_name with student_name as fallback to match actual API response */}
                 <SelectField label="Student" value={selectedStudent} onChange={setSelectedStudent} disabled={!students.length}>
                   <option value="">Select Student</option>
                   {students.map((s) => (
-                    <option key={s.id} value={s.id}>{s.student_name || s.admission_number || "Unknown"}</option>
+                    <option key={s.id} value={s.id}>{s.full_name || s.student_name || s.admission_number || "Unknown"}</option>
                   ))}
                 </SelectField>
                 <div className="grid grid-cols-2 gap-3">
