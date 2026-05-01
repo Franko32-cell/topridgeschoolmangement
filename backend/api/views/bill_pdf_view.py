@@ -22,7 +22,7 @@ import requests
 
 from apps.fees.models import Fee, PaymentTransaction
 from apps.students.models import Student
-from apps.classes.models import Class
+from apps.classes.models import SchoolClass
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -332,7 +332,7 @@ class ClassFeeBillPDFView(APIView):
         class_id = request.query_params.get("class_id")
         term     = request.query_params.get("term")        # optional filter
 
-        school_class = get_object_or_404(Class, id=class_id)
+        school_class = get_object_or_404(SchoolClass, id=class_id)
         students     = Student.objects.filter(school_class=school_class).order_by("full_name")
 
         buffer = BytesIO()
