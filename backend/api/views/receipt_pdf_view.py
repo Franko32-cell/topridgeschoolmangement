@@ -39,7 +39,9 @@ RED    = colors.HexColor("#dc2626")
 BLACK  = colors.HexColor("#111827")
 
 TERM_LABELS = {"term1": "Term 1", "term2": "Term 2", "term3": "Term 3"}
-LOGO_PATH   = os.path.join(settings.BASE_DIR, "static", "images", "logo.jpeg")
+
+# ✅ UPDATED: point to the new uploaded logo
+LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "images", "logo1.jpg")
 
 W = A5[0] - 24 * mm
 
@@ -319,7 +321,7 @@ class PaymentReceiptPDFView(APIView):
 
         pdf.build(elements)
         pdf_data = buffer.getvalue()
-        buffer.close()  # ← free memory immediately
+        buffer.close()
 
         name_slug = student.student_name.strip().replace(" ", "_")
         if not name_slug:
