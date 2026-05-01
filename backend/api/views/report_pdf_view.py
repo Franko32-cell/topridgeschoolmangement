@@ -52,7 +52,9 @@ ROW_ALT  = colors.HexColor("#f0fdf4")
 GOLD     = colors.HexColor("#ca8a04")
 
 TERM_LABELS = {"term1": "Term 1", "term2": "Term 2", "term3": "Term 3"}
-LOGO_PATH   = os.path.join(settings.BASE_DIR, "static", "images", "logo.jpeg")
+
+# ✅ UPDATED: point to the new uploaded logo
+LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "images", "logo1.jpg")
 
 # A4 with 15mm margins
 PAGE_W = A4[0] - 30 * mm
@@ -221,9 +223,9 @@ class StudentReportPDFView(APIView):
             student=student, term=term, year=year,
         )
 
-        school_class = student.school_class
-        level        = class_level(school_class)
-        grade_fn     = get_grade_b79 if level == "basic_7_9" else get_grade_b16
+        school_class  = student.school_class
+        level         = class_level(school_class)
+        grade_fn      = get_grade_b79 if level == "basic_7_9" else get_grade_b16
         show_position = level == "basic_7_9"
 
         # ── Attendance ────────────────────────────────────────────────────────
@@ -299,10 +301,10 @@ class StudentReportPDFView(APIView):
         elements = []
 
         # ── HEADER ────────────────────────────────────────────────────────────
-        logo        = load_logo()
-        logo_cell   = logo if logo else para("", 9)
-        photo       = load_student_photo(student, size=24 * mm)
-        photo_cell  = photo if photo else para("", 9)
+        logo       = load_logo()
+        logo_cell  = logo if logo else para("", 9)
+        photo      = load_student_photo(student, size=24 * mm)
+        photo_cell = photo if photo else para("", 9)
 
         school_block = [
             para("TOP RIDGE SCHOOL",      16, bold=True, color=DGREEN,  align=TA_CENTER),
@@ -330,15 +332,9 @@ class StudentReportPDFView(APIView):
         elements.append(Spacer(1, 4 * mm))
 
         # ── STUDENT INFO BLOCK ────────────────────────────────────────────────
-        class_name  = school_class.name if school_class else "—"
-        term_label  = TERM_LABELS.get(term, term)
+        class_name   = school_class.name if school_class else "—"
+        term_label   = TERM_LABELS.get(term, term)
         overall_tc, overall_bc = grade_color(overall_grade)
-
-        def info_cell(label, value, bold_value=False):
-            return [
-                para(label, 8, bold=True, color=DGREEN),
-                para(str(value), 8, bold=bold_value, color=BLACK),
-            ]
 
         info_rows = [
             [
@@ -391,14 +387,13 @@ class StudentReportPDFView(APIView):
         col_position = 18 * mm if show_position else 0
         col_remark   = PAGE_W - col_subject - col_ca - col_reopen - col_exams - col_total - col_grade - col_position
 
-        # Header row
         header_row = [
-            para("SUBJECT",                    7, bold=True, color=WHITE, align=TA_CENTER),
-            para("CLASS\nSC.\n(40%)",          7, bold=True, color=WHITE, align=TA_CENTER),
+            para("SUBJECT",                     7, bold=True, color=WHITE, align=TA_CENTER),
+            para("CLASS\nSC.\n(40%)",           7, bold=True, color=WHITE, align=TA_CENTER),
             para("READING\nAND REOPEN\n.(20%)", 7, bold=True, color=WHITE, align=TA_CENTER),
-            para("EXAMS\nSCORE\n(40%)",        7, bold=True, color=WHITE, align=TA_CENTER),
-            para("TOTAL\n(100%)",              7, bold=True, color=WHITE, align=TA_CENTER),
-            para("GRADE",                      7, bold=True, color=WHITE, align=TA_CENTER),
+            para("EXAMS\nSCORE\n(40%)",         7, bold=True, color=WHITE, align=TA_CENTER),
+            para("TOTAL\n(100%)",               7, bold=True, color=WHITE, align=TA_CENTER),
+            para("GRADE",                       7, bold=True, color=WHITE, align=TA_CENTER),
         ]
         if show_position:
             header_row.append(para("POSITION", 7, bold=True, color=WHITE, align=TA_CENTER))
@@ -414,22 +409,21 @@ class StudentReportPDFView(APIView):
         for i, s in enumerate(subjects_data):
             gc_text, gc_bg = grade_color(s["grade"])
             row = [
-                para(s["subject"],                      8, bold=True,  color=BLACK),
-                para(f"{s['ca']}",                      8,             color=DGRAY,  align=TA_CENTER),
-                para(f"{s['reopen']}",                  8,             color=DGRAY,  align=TA_CENTER),
-                para(f"{s['exams']}",                   8,             color=DGRAY,  align=TA_CENTER),
-                para(f"{s['score']}",                   8, bold=True,  color=DGREEN, align=TA_CENTER),
-                para(s["grade"],                        8, bold=True,  color=gc_text, align=TA_CENTER),
+                para(s["subject"],       8, bold=True, color=BLACK),
+                para(f"{s['ca']}",       8,            color=DGRAY,   align=TA_CENTER),
+                para(f"{s['reopen']}",   8,            color=DGRAY,   align=TA_CENTER),
+                para(f"{s['exams']}",    8,            color=DGRAY,   align=TA_CENTER),
+                para(f"{s['score']}",    8, bold=True, color=DGREEN,  align=TA_CENTER),
+                para(s["grade"],         8, bold=True, color=gc_text, align=TA_CENTER),
             ]
             if show_position:
                 pos = s["subject_position"]
                 row.append(para(str(pos) if pos else "—", 8, bold=True, color=DGREEN, align=TA_CENTER))
-            row.append(para(s["remark"].upper(),        8, bold=True,  color=gc_text, align=TA_CENTER))
+            row.append(para(s["remark"].upper(), 8, bold=True, color=gc_text, align=TA_CENTER))
             rows.append(row)
 
         # Empty spacer row
-        empty_row = [para("", 6)] * len(col_widths)
-        rows.append(empty_row)
+        rows.append([para("", 6)] * len(col_widths))
 
         subj_tbl = Table(rows, colWidths=col_widths, repeatRows=1)
 
