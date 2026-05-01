@@ -48,7 +48,7 @@ SCHOOL_NAME  = "TOP RIDGE SCHOOL"
 SCHOOL_SUB   = "Excellence in Education"
 SCHOOL_MOTTO = "PERSEVERANCE  ·  TRUTH  ·  & COURAGE"
 
-LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "images", "logo.jpeg")
+LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "images", "logo1.jpg")
 
 PW     = A4[0] - 32 * mm   # usable page width
 PAGE_H = A4[1]
@@ -512,7 +512,7 @@ def build_parent_section(admission):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Admission checklist  (NEW)
+# Admission checklist
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_checklist_section():
@@ -705,6 +705,14 @@ def build_signature_section():
     elements = []
     GAP = 6 * mm
 
+    _pad = TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ])
+
     # ── Parent declaration ────────────────────────────────────────────────────
     elements.append(build_section_header("PARENT / GUARDIAN DECLARATION"))
     elements.append(Spacer(1, GAP))
@@ -724,16 +732,10 @@ def build_signature_section():
     sg_line, sg_lbl = _sig_field("Signature of Parent / Guardian", PW * 0.62, tall=True)
     dt_line, dt_lbl = _sig_field("Date (DD / MM / YYYY)",          PW * 0.34, tall=True)
 
-    _pad = TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ])
-    r3 = Table([[sg_line, Spacer(4*mm, 1), dt_line]], colWidths=[PW*.62, 4*mm, PW*.34])
-    l3 = Table([[sg_lbl,  Spacer(4*mm, 1), dt_lbl]],  colWidths=[PW*.62, 4*mm, PW*.34])
-    r3.setStyle(_pad);  l3.setStyle(_pad)
+    r3 = Table([[sg_line, Spacer(4 * mm, 1), dt_line]], colWidths=[PW * .62, 4 * mm, PW * .34])
+    l3 = Table([[sg_lbl,  Spacer(4 * mm, 1), dt_lbl]],  colWidths=[PW * .62, 4 * mm, PW * .34])
+    r3.setStyle(_pad)
+    l3.setStyle(_pad)
     elements += [r3, l3]
 
     elements.append(Spacer(1, 10 * mm))
@@ -772,11 +774,18 @@ def build_signature_section():
     st_line, st_lbl = _sig_field("Official School Stamp",                 PW * 0.30, tall=True)
     pd_line, pd_lbl = _sig_field("Date",                                  PW * 0.26, tall=True)
 
-    cw = [PW*.38, 2*mm, PW*.30, 2*mm, PW*.26]
-    pr_row = Table([[pr_line, Spacer(2*mm,1), st_line, Spacer(2*mm,1), pd_line]], colWidths=cw)
-    pr_lbl = Table([[pr_lbl,  Spacer(2*mm,1), st_lbl,  Spacer(2*mm,1), pd_lbl]],  colWidths=cw)
-    pr_row.setStyle(_pad);  pr_lbl.setStyle(_pad)
-    elements += [pr_row, pr_lbl]
+    cw = [PW * .38, 2 * mm, PW * .30, 2 * mm, PW * .26]
+    pr_row = Table(
+        [[pr_line, Spacer(2 * mm, 1), st_line, Spacer(2 * mm, 1), pd_line]],
+        colWidths=cw,
+    )
+    pr_lbl_row = Table(
+        [[pr_lbl,  Spacer(2 * mm, 1), st_lbl,  Spacer(2 * mm, 1), pd_lbl]],
+        colWidths=cw,
+    )
+    pr_row.setStyle(_pad)
+    pr_lbl_row.setStyle(_pad)
+    elements += [pr_row, pr_lbl_row]
     elements.append(Spacer(1, 8 * mm))
 
     stamp = Table(
@@ -789,7 +798,7 @@ def build_signature_section():
         ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
         ("BACKGROUND", (0, 0), (-1, -1), GRAY_50),
     ]))
-    stamp_row = Table([[para("", 1), stamp]], colWidths=[PW - 52*mm, 52*mm])
+    stamp_row = Table([[para("", 1), stamp]], colWidths=[PW - 52 * mm, 52 * mm])
     stamp_row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "BOTTOM")]))
     elements.append(stamp_row)
 
