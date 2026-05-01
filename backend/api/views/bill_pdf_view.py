@@ -5,7 +5,6 @@ import re
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.conf import settings
-from django.utils import timezone
 
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -40,7 +39,6 @@ BLACK  = colors.HexColor("#111827")
 
 TERM_LABELS = {"term1": "Term 1", "term2": "Term 2", "term3": "Term 3"}
 
-# ✅ UPDATED: point to the new uploaded logo
 LOGO_PATH = os.path.join(settings.BASE_DIR, "static", "images", "logo1.jpg")
 
 W = A5[0] - 24 * mm
@@ -323,7 +321,8 @@ class PaymentReceiptPDFView(APIView):
         pdf_data = buffer.getvalue()
         buffer.close()
 
-        name_slug = student.student_name.strip().replace(" ", "_")
+        # ── Filename ──────────────────────────────────────────────────────
+        name_slug = student.full_name.strip().replace(" ", "_")  # fixed: was student.student_name
         if not name_slug:
             name_slug = student.admission_number
 
