@@ -1,4 +1,6 @@
-# api/views/auth_view.py
+"""
+api/views/auth_view.py
+"""
 
 import logging
 from rest_framework.views import APIView
@@ -18,7 +20,7 @@ from apps.teachers.models import Teacher
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-STUDENT_ID_PREFIX = "TRS"  # Changed from LSA → TRS
+STUDENT_ID_PREFIX = "TRS"
 
 
 # ─────────────────────────────────────────────
@@ -36,7 +38,7 @@ class IsAdminRole(IsAuthenticated):
 
 
 # ─────────────────────────────────────────────
-# Profile builders  (DRY – used by Login & Me)
+# Profile builders
 # ─────────────────────────────────────────────
 
 def _build_student_profile(user: User) -> dict:
@@ -60,10 +62,15 @@ def _build_teacher_profile(user: User) -> dict:
     """Return teacher profile dict, or {} if no linked Teacher exists."""
     try:
         teacher = Teacher.objects.select_related("school_class", "subject").get(user=user)
-        photo_url = teacher.photo.url if getattr(teacher, "photo", None) else None
+        photo_url = teacher.photo.url if getattr(teacher, "photo", None) and teacher.photo else None
+
+        # full_name is the display name — never fall back to teacher_id
+        full_name = teacher.full_name or f"{getattr(teacher, 'first_name', '')} {getattr(teacher, 'last_name', '')}".strip()
+
         return {
             "teacher_id": teacher.teacher_id,
-            "full_name":  teacher.full_name,
+            "full_name":  full_name,
+            "name":       full_name,   # alias so frontend can use either key
             "class":      teacher.school_class.name if teacher.school_class else None,
             "class_id":   teacher.school_class.id   if teacher.school_class else None,
             "subject":    teacher.subject.name       if teacher.subject       else None,
@@ -94,7 +101,7 @@ def _resolve_username(identifier: str) -> str:
     if User.objects.filter(username=identifier).exists():
         return identifier
 
-    # 2. Student admission number (TRS- prefix)
+    # 2. Student admission number
     try:
         student = Student.objects.get(admission_number__iexact=identifier)
         logger.info(
@@ -139,8 +146,11 @@ class LoginView(APIView):
         username = _resolve_username(identifier)
         user     = authenticate(request=request, username=username, password=password)
 
-        # Use a single generic message to avoid user-enumeration attacks
         if user is None:
+            logger.warning(
+                "Failed login attempt for identifier='%s' resolved_username='%s'",
+                identifier, username,
+            )
             return Response(
                 {"error": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -217,7 +227,7 @@ class RegisterView(APIView):
 
         user = User.objects.create_user(
             username=username,
-            email=email or None,   # store NULL rather than empty string
+            email=email or None,
             password=password,
             role="admin",
             is_active=False,
@@ -391,11 +401,8 @@ class AdminApprovalViewSet(viewsets.ViewSet):
 
         return Response({"message": f"{username}'s account has been rejected and removed."})
 
-    # ── Internal helper ──────────────────────────────────────────────────────
-
     @staticmethod
     def _get_admin_or_404(pk) -> "User | Response":
-        """Return the User or a 404 Response."""
         try:
             return User.objects.get(pk=pk, role="admin")
         except User.DoesNotExist:
