@@ -4,11 +4,11 @@ import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status, viewsets, filters
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 
 from django.contrib.auth import get_user_model, authenticate
-from django.contrib.auth.models import update_last_login       # ← new
+from django.contrib.auth.models import update_last_login
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -18,18 +18,96 @@ from apps.teachers.models import Teacher
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+STUDENT_ID_PREFIX = "TRS"  # Changed from LSA → TRS
+
 
 # ─────────────────────────────────────────────
-# Permission helper
+# Permission helpers
 # ─────────────────────────────────────────────
 
 class IsAdminRole(IsAuthenticated):
-    """Only allow users with role='admin'."""
+    """Only allow authenticated users with role='admin'."""
+
     def has_permission(self, request, view):
         return (
             super().has_permission(request, view)
-            and request.user.role == "admin"
+            and getattr(request.user, "role", None) == "admin"
         )
+
+
+# ─────────────────────────────────────────────
+# Profile builders  (DRY – used by Login & Me)
+# ─────────────────────────────────────────────
+
+def _build_student_profile(user: User) -> dict:
+    """Return student profile dict, or {} if no linked Student exists."""
+    try:
+        student = Student.objects.select_related("school_class").get(user=user)
+        return {
+            "student_id":       student.id,
+            "admission_number": student.admission_number,
+            "full_name":        student.full_name,
+            "class":            student.school_class.name if student.school_class else None,
+            "class_id":         student.school_class.id   if student.school_class else None,
+            "photo":            student.photo.url         if student.photo         else None,
+        }
+    except Student.DoesNotExist:
+        logger.warning("No Student record linked to user '%s'.", user.username)
+        return {}
+
+
+def _build_teacher_profile(user: User) -> dict:
+    """Return teacher profile dict, or {} if no linked Teacher exists."""
+    try:
+        teacher = Teacher.objects.select_related("school_class", "subject").get(user=user)
+        photo_url = teacher.photo.url if getattr(teacher, "photo", None) else None
+        return {
+            "teacher_id": teacher.teacher_id,
+            "full_name":  teacher.full_name,
+            "class":      teacher.school_class.name if teacher.school_class else None,
+            "class_id":   teacher.school_class.id   if teacher.school_class else None,
+            "subject":    teacher.subject.name       if teacher.subject       else None,
+            "subject_id": teacher.subject.id         if teacher.subject       else None,
+            "photo":      photo_url,
+        }
+    except Teacher.DoesNotExist:
+        logger.warning("No Teacher record linked to user '%s'.", user.username)
+        return {}
+
+
+def _build_profile(user: User) -> dict:
+    """Dispatch to the correct profile builder based on role."""
+    if user.role == "student":
+        return _build_student_profile(user)
+    if user.role == "teacher":
+        return _build_teacher_profile(user)
+    return {}
+
+
+def _resolve_username(identifier: str) -> str:
+    """
+    Accept a plain username, a student admission number (TRS-YYYY-NNNN),
+    or a teacher ID and resolve it to the underlying auth username.
+    Returns the original identifier unchanged if no match is found.
+    """
+    if User.objects.filter(username=identifier).exists():
+        return identifier
+
+    # Try admission number (supports legacy LSA prefix too, for safe migration)
+    try:
+        student = Student.objects.get(admission_number__iexact=identifier)
+        return student.user.username
+    except Student.DoesNotExist:
+        pass
+
+    # Try teacher ID
+    try:
+        teacher = Teacher.objects.get(teacher_id__iexact=identifier)
+        return teacher.user.username
+    except Teacher.DoesNotExist:
+        pass
+
+    return identifier
 
 
 # ─────────────────────────────────────────────
@@ -39,37 +117,29 @@ class IsAdminRole(IsAuthenticated):
 class LoginView(APIView):
 
     def post(self, request):
-        identifier = request.data.get("username")
-        password   = request.data.get("password")
+        identifier = request.data.get("username", "").strip()
+        password   = request.data.get("password", "")
 
         if not identifier or not password:
             return Response(
-                {"error": "Username and password are required"},
+                {"error": "Username and password are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        username = identifier
+        username = _resolve_username(identifier)
+        user     = authenticate(request=request, username=username, password=password)
 
-        if not User.objects.filter(username=identifier).exists():
-            try:
-                student  = Student.objects.get(admission_number__iexact=identifier)
-                username = student.user.username
-            except Student.DoesNotExist:
-                pass
-
-            if username == identifier:
-                try:
-                    teacher  = Teacher.objects.get(teacher_id__iexact=identifier)
-                    username = teacher.user.username
-                except Teacher.DoesNotExist:
-                    pass
-
-        user = authenticate(request=request, username=username, password=password)
-
+        # Use a single generic message to avoid user-enumeration attacks
         if user is None:
             return Response(
-                {"error": "Invalid credentials"},
+                {"error": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not user.is_active:
+            return Response(
+                {"error": "Account is disabled."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if user.role == "admin" and not user.is_approved:
@@ -81,111 +151,87 @@ class LoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if not user.is_active:
-            return Response(
-                {"error": "Account is disabled"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # ← update last_login so active user tracking works
         update_last_login(None, user)
 
         refresh = RefreshToken.for_user(user)
-        profile = {}
+        profile = _build_profile(user)
 
-        if user.role == "student":
-            try:
-                student = Student.objects.select_related("school_class").get(user=user)
-                profile = {
-                    "student_id":       student.id,
-                    "admission_number": student.admission_number,
-                    "full_name":        student.full_name,
-                    "class":            student.school_class.name if student.school_class else None,
-                    "class_id":         student.school_class.id   if student.school_class else None,
-                    "photo":            student.photo.url         if student.photo         else None,
-                }
-            except Student.DoesNotExist:
-                pass
+        logger.info("User '%s' (role=%s) logged in successfully.", user.username, user.role)
 
-        elif user.role == "teacher":
-            try:
-                teacher = Teacher.objects.select_related("school_class", "subject").get(user=user)
-                profile = {
-                    "teacher_id": teacher.teacher_id,
-                    "full_name":  teacher.full_name,
-                    "class":      teacher.school_class.name if teacher.school_class else None,
-                    "class_id":   teacher.school_class.id   if teacher.school_class else None,
-                    "subject":    teacher.subject.name      if teacher.subject       else None,
-                    "subject_id": teacher.subject.id        if teacher.subject       else None,
-                    "photo":      teacher.photo.url         if hasattr(teacher, "photo") and teacher.photo else None,
-                }
-            except Teacher.DoesNotExist:
-                pass
-
-        return Response({
-            "access":  str(refresh.access_token),
-            "refresh": str(refresh),
-            "user": {
-                "id":       user.id,
-                "username": user.username,
-                "email":    user.email,
-                "role":     user.role,
-                **profile,
+        return Response(
+            {
+                "access":  str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": {
+                    "id":       user.id,
+                    "username": user.username,
+                    "email":    user.email,
+                    "role":     user.role,
+                    **profile,
+                },
             },
-        }, status=status.HTTP_200_OK)
+            status=status.HTTP_200_OK,
+        )
 
 
 class RegisterView(APIView):
+
     def post(self, request):
-        username = request.data.get("username")
-        email    = request.data.get("email")
-        password = request.data.get("password")
+        username = request.data.get("username", "").strip()
+        email    = request.data.get("email", "").strip()
+        password = request.data.get("password", "")
 
         if not username or not password:
             return Response(
-                {"error": "Username and password are required"},
+                {"error": "Username and password are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if len(password) < 6:
             return Response(
-                {"error": "Password must be at least 6 characters"},
+                {"error": "Password must be at least 6 characters."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if User.objects.filter(username=username).exists():
             return Response(
-                {"error": "Username already exists"},
+                {"error": "Username already exists."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if email and User.objects.filter(email=email).exists():
             return Response(
-                {"error": "Email already exists"},
+                {"error": "Email already in use."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         user = User.objects.create_user(
             username=username,
-            email=email,
+            email=email or None,   # store NULL rather than empty string
             password=password,
             role="admin",
             is_active=False,
             is_approved=False,
         )
 
-        logger.info(f"New admin registration pending approval: {username}")
+        logger.info("New admin registration pending approval: '%s'.", username)
 
-        return Response({
-            "message": "Account created. An existing administrator must approve your account before you can log in.",
-            "status":  "pending_approval",
-            "user": {
-                "id":       user.id,
-                "username": user.username,
-                "email":    user.email,
-                "role":     user.role,
+        return Response(
+            {
+                "message": (
+                    "Account created. An existing administrator must approve "
+                    "your account before you can log in."
+                ),
+                "status": "pending_approval",
+                "user": {
+                    "id":       user.id,
+                    "username": user.username,
+                    "email":    user.email,
+                    "role":     user.role,
+                },
             },
-        }, status=status.HTTP_201_CREATED)
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MeView(APIView):
@@ -193,36 +239,7 @@ class MeView(APIView):
 
     def get(self, request):
         user    = request.user
-        profile = {}
-
-        if user.role == "student":
-            try:
-                student = Student.objects.select_related("school_class").get(user=user)
-                profile = {
-                    "student_id":       student.id,
-                    "admission_number": student.admission_number,
-                    "full_name":        student.full_name,
-                    "class":            student.school_class.name if student.school_class else None,
-                    "class_id":         student.school_class.id   if student.school_class else None,
-                    "photo":            student.photo.url         if student.photo         else None,
-                }
-            except Student.DoesNotExist:
-                pass
-
-        elif user.role == "teacher":
-            try:
-                teacher = Teacher.objects.select_related("school_class", "subject").get(user=user)
-                profile = {
-                    "teacher_id": teacher.teacher_id,
-                    "full_name":  teacher.full_name,
-                    "class":      teacher.school_class.name if teacher.school_class else None,
-                    "class_id":   teacher.school_class.id   if teacher.school_class else None,
-                    "subject":    teacher.subject.name      if teacher.subject       else None,
-                    "subject_id": teacher.subject.id        if teacher.subject       else None,
-                    "photo":      teacher.photo.url         if hasattr(teacher, "photo") and teacher.photo else None,
-                }
-            except Teacher.DoesNotExist:
-                pass
+        profile = _build_profile(user)
 
         return Response({
             "id":          user.id,
@@ -243,8 +260,8 @@ class ChangePasswordView(APIView):
 
     def post(self, request):
         user         = request.user
-        old_password = request.data.get("old_password")
-        new_password = request.data.get("new_password")
+        old_password = request.data.get("old_password", "")
+        new_password = request.data.get("new_password", "")
 
         if not old_password or not new_password:
             return Response(
@@ -264,10 +281,16 @@ class ChangePasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if old_password == new_password:
+            return Response(
+                {"new_password": ["New password must differ from the old password."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         user.set_password(new_password)
         user.save()
 
-        logger.info(f"Password changed for user: {user.username}")
+        logger.info("Password changed for user: '%s'.", user.username)
 
         return Response({"detail": "Password updated successfully."})
 
@@ -279,7 +302,8 @@ class ChangePasswordView(APIView):
 class AdminApprovalViewSet(viewsets.ViewSet):
     permission_classes = [IsAdminRole]
 
-    def _serialize_user(self, user):
+    @staticmethod
+    def _serialize_user(user: User) -> dict:
         return {
             "id":          user.id,
             "username":    user.username,
@@ -290,29 +314,48 @@ class AdminApprovalViewSet(viewsets.ViewSet):
         }
 
     def list(self, request):
-        pending = User.objects.filter(role="admin", is_approved=False).order_by("date_joined")
+        """Return all pending (unapproved) admin accounts."""
+        pending = (
+            User.objects
+            .filter(role="admin", is_approved=False)
+            .order_by("date_joined")
+        )
         return Response([self._serialize_user(u) for u in pending])
 
     @action(detail=False, methods=["get"], url_path="all")
     def all_admins(self, request):
-        admins = User.objects.filter(role="admin").exclude(id=request.user.id).order_by("-date_joined")
+        """Return all other admin accounts (approved or not)."""
+        admins = (
+            User.objects
+            .filter(role="admin")
+            .exclude(id=request.user.id)
+            .order_by("-date_joined")
+        )
         return Response([self._serialize_user(u) for u in admins])
 
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
-        try:
-            user = User.objects.get(pk=pk, role="admin")
-        except User.DoesNotExist:
-            return Response({"error": "Admin not found."}, status=status.HTTP_404_NOT_FOUND)
+        user = self._get_admin_or_404(pk)
+        if isinstance(user, Response):
+            return user
 
         if user == request.user:
-            return Response({"error": "You cannot approve yourself."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "You cannot approve yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user.is_approved:
+            return Response(
+                {"error": "This account is already approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         user.is_approved = True
         user.is_active   = True
         user.save(update_fields=["is_approved", "is_active"])
 
-        logger.info(f"Admin {user.username} approved by {request.user.username}")
+        logger.info("Admin '%s' approved by '%s'.", user.username, request.user.username)
 
         return Response({
             "message": f"{user.username} has been approved and can now log in.",
@@ -321,17 +364,32 @@ class AdminApprovalViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):
-        try:
-            user = User.objects.get(pk=pk, role="admin")
-        except User.DoesNotExist:
-            return Response({"error": "Admin not found."}, status=status.HTTP_404_NOT_FOUND)
+        user = self._get_admin_or_404(pk)
+        if isinstance(user, Response):
+            return user
 
         if user == request.user:
-            return Response({"error": "You cannot reject yourself."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "You cannot reject yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         username = user.username
         user.delete()
 
-        logger.info(f"Admin account {username} rejected and deleted by {request.user.username}")
+        logger.info("Admin account '%s' rejected and deleted by '%s'.", username, request.user.username)
 
         return Response({"message": f"{username}'s account has been rejected and removed."})
+
+    # ── Internal helper ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _get_admin_or_404(pk) -> "User | Response":
+        """Return the User or a 404 Response."""
+        try:
+            return User.objects.get(pk=pk, role="admin")
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Admin not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
