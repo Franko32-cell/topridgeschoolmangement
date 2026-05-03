@@ -1,15 +1,10 @@
-"""
-api/views/report_view.py
-GET  /api/report/student/<id>/          → JSON report data
-PATCH /api/report/student/<id>/         → save teacher remarks
-"""
-
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from apps.students.models import Student
 from apps.results.models import Result, Report
@@ -55,7 +50,9 @@ def ordinal(n):
     if n is None:
         return None
     n = int(n)
-    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10 if n % 100 not in (11, 12, 13) else 0, "th")
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(
+        n % 10 if n % 100 not in (11, 12, 13) else 0, "th"
+    )
     return f"{n}{suffix}"
 
 
@@ -87,7 +84,12 @@ class StudentReportView(APIView):
     def get(self, request, student_id):
         student = get_object_or_404(Student, id=student_id)
         term    = request.query_params.get("term", "term1")
-        year    = int(request.query_params.get("year", timezone.now().year))
+
+        # Safe year parsing — defaults to current year if missing or invalid
+        try:
+            year = int(request.query_params.get("year", timezone.now().year))
+        except (ValueError, TypeError):
+            year = timezone.now().year
 
         results = Result.objects.filter(
             student=student, term=term, year=year
@@ -95,7 +97,7 @@ class StudentReportView(APIView):
 
         if not results.exists():
             return Response(
-                {"detail": "No results found for this student and term."},
+                {"detail": f"No results found for this student in {term} {year}."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -104,9 +106,8 @@ class StudentReportView(APIView):
             student=student, term=term, year=year,
         )
 
-        # ── Attendance from Attendance model ──────────────────────────────────
+        # ── Attendance ────────────────────────────────────────────────────────
         try:
-            from apps.attendance.models import Attendance
             att_qs      = Attendance.objects.filter(student=student, term=term, year=year)
             att_total   = att_qs.count()
             att_present = att_qs.filter(status="present").count()
@@ -121,7 +122,7 @@ class StudentReportView(APIView):
         level        = class_level(school_class)
         grade_fn     = get_grade_b79 if level == "basic_7_9" else get_grade_b16
 
-        # ── Number on roll (students in same class + term with results) ────────
+        # ── Number on roll ────────────────────────────────────────────────────
         number_on_roll = (
             Result.objects
             .filter(term=term, year=year, student__school_class=school_class)
@@ -153,19 +154,17 @@ class StudentReportView(APIView):
         overall_grade = get_overall_grade(average_score, level)
 
         # ── Overall class position ────────────────────────────────────────────
-        # Rank by total score among students in same class/term/year
-        from apps.results.models import Result as R
         from django.db.models import Sum
 
         peer_scores = (
-            R.objects
+            Result.objects
             .filter(term=term, year=year, student__school_class=school_class)
             .values("student")
             .annotate(total=Sum("score"))
             .order_by("-total")
         )
         position      = None
-        show_position = level == "basic_7_9"   # only show position for B7-9
+        show_position = level == "basic_7_9"
         if show_position:
             for rank, row in enumerate(peer_scores, start=1):
                 if row["student"] == student.id:
@@ -181,8 +180,14 @@ class StudentReportView(APIView):
                 pass
 
         # ── Dates ─────────────────────────────────────────────────────────────
-        vacation_date   = report_obj.vacation_date.strftime("%d %b, %Y").upper()   if report_obj.vacation_date   else ""
-        resumption_date = report_obj.resumption_date.strftime("%d %b, %Y").upper() if report_obj.resumption_date else ""
+        vacation_date_display   = (
+            report_obj.vacation_date.strftime("%d %b, %Y").upper()
+            if report_obj.vacation_date else ""
+        )
+        resumption_date_display = (
+            report_obj.resumption_date.strftime("%d %b, %Y").upper()
+            if report_obj.resumption_date else ""
+        )
 
         return Response({
             # School info
@@ -217,7 +222,7 @@ class StudentReportView(APIView):
             "attendance_total":   att_total,
             "attendance_percent": att_percent,
 
-            # Remarks (editable)
+            # Remarks
             "conduct":         report_obj.conduct,
             "attitude":        report_obj.attitude,
             "interest":        report_obj.interest,
@@ -227,14 +232,19 @@ class StudentReportView(APIView):
             "resumption_date": report_obj.resumption_date.isoformat() if report_obj.resumption_date else "",
 
             # Formatted dates for display
-            "vacation_date_display":   vacation_date,
-            "resumption_date_display": resumption_date,
+            "vacation_date_display":   vacation_date_display,
+            "resumption_date_display": resumption_date_display,
         })
 
     def patch(self, request, student_id):
         student = get_object_or_404(Student, id=student_id)
         term    = request.data.get("term", "term1")
-        year    = int(request.data.get("year", timezone.now().year))
+
+        # Safe year parsing
+        try:
+            year = int(request.data.get("year", timezone.now().year))
+        except (ValueError, TypeError):
+            year = timezone.now().year
 
         report_obj, _ = Report.objects.get_or_create(
             student=student, term=term, year=year,
@@ -248,7 +258,6 @@ class StudentReportView(APIView):
         for field in fields:
             if field in request.data:
                 val = request.data[field]
-                # Allow clearing date fields with empty string
                 if field in ("vacation_date", "resumption_date") and val == "":
                     val = None
                 setattr(report_obj, field, val)

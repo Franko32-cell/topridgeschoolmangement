@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import API from "../services/api";
 
 // ---------------------------------------------------------------------------
@@ -11,9 +11,11 @@ const TERMS = [
   { value: "term3", label: "Term 3" },
 ];
 
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
+
 // Grade colours — covers both numeric (Basic 7–9) and letter (Basic 1–6) systems
 const GRADE_COLORS = {
-  // Basic 1–6 letter grades
   "A":  "bg-green-100   text-green-800",
   "B1": "bg-emerald-100 text-emerald-800",
   "B2": "bg-teal-100    text-teal-800",
@@ -23,7 +25,6 @@ const GRADE_COLORS = {
   "D2": "bg-orange-100  text-orange-700",
   "E1": "bg-red-100     text-red-700",
   "E2": "bg-red-200     text-red-800",
-  // Basic 7–9 numeric grades
   "1":  "bg-green-100   text-green-800",
   "2":  "bg-emerald-100 text-emerald-800",
   "3":  "bg-teal-100    text-teal-800",
@@ -34,7 +35,6 @@ const GRADE_COLORS = {
   "9":  "bg-red-200     text-red-800",
 };
 
-// Grading scales — labels match exactly what appears on the printed report cards
 const GRADE_SCALE_B79 = [
   { range: "90 – 100", grade: "1", label: "EXCELLENT"    },
   { range: "80 – 89",  grade: "2", label: "VERY GOOD"    },
@@ -85,6 +85,7 @@ const Reports = () => {
   const [selectedClass, setSelectedClass]     = useState("");
   const [selectedStudent, setSelectedStudent] = useState("");
   const [selectedTerm, setSelectedTerm]       = useState("term1");
+  const [selectedYear, setSelectedYear]       = useState(CURRENT_YEAR);
   const [report, setReport]                   = useState(null);
   const [loading, setLoading]                 = useState(false);
   const [downloading, setDownloading]         = useState(false);
@@ -102,17 +103,24 @@ const Reports = () => {
   const [savingRemarks, setSavingRemarks] = useState(false);
   const [remarksSaved, setRemarksSaved]   = useState(false);
 
+  // ── Data fetchers ──────────────────────────────────────────────────────────
+
   useEffect(() => { fetchClasses(); }, []);
 
   useEffect(() => {
     if (selectedClass) fetchStudents(selectedClass);
-    else { setStudents([]); setSelectedStudent(""); setReport(null); }
+    else {
+      setStudents([]);
+      setSelectedStudent("");
+      setReport(null);
+    }
   }, [selectedClass]);
 
+  // Re-fetch report whenever student, term, OR year changes
   useEffect(() => {
-    if (selectedStudent && selectedTerm) fetchReport();
+    if (selectedStudent && selectedTerm && selectedYear) fetchReport();
     else setReport(null);
-  }, [selectedStudent, selectedTerm]);
+  }, [selectedStudent, selectedTerm, selectedYear]);
 
   const fetchClasses = async () => {
     try {
@@ -132,10 +140,15 @@ const Reports = () => {
     }
   };
 
-  const fetchReport = async () => {
-    setLoading(true); setError(""); setReport(null); setRemarksSaved(false);
+  const fetchReport = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setReport(null);
+    setRemarksSaved(false);
     try {
-      const res = await API.get(`/report/student/${selectedStudent}/?term=${selectedTerm}`);
+      const res = await API.get(
+        `/report/student/${selectedStudent}/?term=${selectedTerm}&year=${selectedYear}`
+      );
       setReport(res.data);
       setRemarks({
         conduct:         res.data.conduct         || "",
@@ -149,19 +162,22 @@ const Reports = () => {
     } catch (err) {
       setError(
         err.response?.status === 404
-          ? "No report found for this student and term."
-          : "Failed to load report."
+          ? `No results found for this student in ${selectedTerm.replace("term", "Term ")} ${selectedYear}. Make sure results have been entered.`
+          : "Failed to load report. Please try again."
       );
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedStudent, selectedTerm, selectedYear]);
 
   const saveRemarks = async () => {
-    setSavingRemarks(true); setRemarksSaved(false); setError("");
+    setSavingRemarks(true);
+    setRemarksSaved(false);
+    setError("");
     try {
       await API.patch(`/report/student/${selectedStudent}/`, {
         term:            selectedTerm,
+        year:            selectedYear,
         conduct:         remarks.conduct,
         attitude:        remarks.attitude,
         interest:        remarks.interest,
@@ -171,8 +187,10 @@ const Reports = () => {
         resumption_date: remarks.resumption_date || "",
       });
       setRemarksSaved(true);
-      // Refresh so the preview reflects saved data
-      const res = await API.get(`/report/student/${selectedStudent}/?term=${selectedTerm}`);
+      // Refresh preview with saved data
+      const res = await API.get(
+        `/report/student/${selectedStudent}/?term=${selectedTerm}&year=${selectedYear}`
+      );
       setReport(res.data);
     } catch {
       setError("Failed to save remarks.");
@@ -185,13 +203,16 @@ const Reports = () => {
     setDownloading(true);
     try {
       const res = await API.get(
-        `/report/student/${selectedStudent}/pdf/?term=${selectedTerm}`,
+        `/report/student/${selectedStudent}/pdf/?term=${selectedTerm}&year=${selectedYear}`,
         { responseType: "blob" }
       );
       const url  = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href  = url;
-      link.setAttribute("download", `report_${selectedStudent}_${selectedTerm}.pdf`);
+      link.setAttribute(
+        "download",
+        `report_${selectedStudent}_${selectedTerm}_${selectedYear}.pdf`
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -208,11 +229,11 @@ const Reports = () => {
     setRemarksSaved(false);
   };
 
-  const level      = report?.level || "basic_7_9";
+  const level      = report?.level || "basic_1_6";
   const gradeScale = level === "basic_7_9" ? GRADE_SCALE_B79 : GRADE_SCALE_B16;
-
-  // Subject options for the Interest dropdown
   const subjectOptions = report?.subjects?.map((s) => s.subject) || [];
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6">
@@ -226,9 +247,13 @@ const Reports = () => {
 
       {/* ── Filters ── */}
       <div className="flex gap-3 mb-6 flex-wrap items-center">
+        {/* Class */}
         <select
           value={selectedClass}
-          onChange={(e) => { setSelectedClass(e.target.value); setReport(null); }}
+          onChange={(e) => {
+            setSelectedClass(e.target.value);
+            setReport(null);
+          }}
           className="border p-2 rounded min-w-[150px]"
         >
           <option value="">Select Class</option>
@@ -237,6 +262,7 @@ const Reports = () => {
           ))}
         </select>
 
+        {/* Student */}
         <select
           value={selectedStudent}
           onChange={(e) => setSelectedStudent(e.target.value)}
@@ -249,6 +275,7 @@ const Reports = () => {
           ))}
         </select>
 
+        {/* Term */}
         <select
           value={selectedTerm}
           onChange={(e) => setSelectedTerm(e.target.value)}
@@ -256,6 +283,17 @@ const Reports = () => {
         >
           {TERMS.map((t) => (
             <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+
+        {/* Year — KEY FIX: was missing entirely */}
+        <select
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
+          className="border p-2 rounded"
+        >
+          {YEARS.map((y) => (
+            <option key={y} value={y}>{y}</option>
           ))}
         </select>
 
@@ -270,12 +308,21 @@ const Reports = () => {
         )}
       </div>
 
-      {loading && <p className="text-gray-500">Loading report…</p>}
+      {loading && (
+        <div className="flex items-center gap-2 text-gray-500 py-8">
+          <svg className="animate-spin h-5 w-5 text-green-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          Loading report…
+        </div>
+      )}
 
+      {/* ── Report Card ── */}
       {report && (
         <div className="bg-white rounded-lg shadow border max-w-4xl">
 
-          {/* ── Header ── */}
+          {/* Header */}
           <div className="bg-green-800 text-white p-6 rounded-t-lg flex justify-between items-start">
             <div>
               <h2 className="text-xl font-bold tracking-wide">
@@ -292,9 +339,9 @@ const Reports = () => {
                 <p className="text-green-200 text-xs">Admission No: {report.admission_number || "—"}</p>
                 <p className="text-green-200 text-xs">Class: {report.class || "—"}</p>
                 <p className="text-green-200 text-xs">
-                  Term: {TERMS.find((t) => t.value === report.term)?.label || report.term}
+                  {TERMS.find((t) => t.value === report.term)?.label || report.term} — {report.year}
                 </p>
-                {report.number_on_roll && (
+                {report.number_on_roll > 0 && (
                   <p className="text-green-200 text-xs">Number on Roll: {report.number_on_roll}</p>
                 )}
               </div>
@@ -314,7 +361,7 @@ const Reports = () => {
             </div>
           </div>
 
-          {/* ── Stats Row ── */}
+          {/* Stats Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 border-b">
             {[
               { label: "Total Score",   value: report.total_score   ?? "—" },
@@ -344,7 +391,7 @@ const Reports = () => {
             ))}
           </div>
 
-          {/* ── Subject Table ── */}
+          {/* Subject Table */}
           <div className="p-6">
             <h3 className="font-semibold text-gray-700 mb-3">Subject Results</h3>
             <div className="overflow-x-auto">
@@ -352,7 +399,6 @@ const Reports = () => {
                 <thead className="bg-green-50">
                   <tr>
                     <th className="p-2 text-left">SUBJECT</th>
-                    {/* Column order matches the printed report card exactly */}
                     <th className="p-2 text-center text-green-800">
                       CLASS SC.<br /><span className="font-normal text-xs">40%</span>
                     </th>
@@ -376,17 +422,12 @@ const Reports = () => {
                   {report.subjects?.map((sub, i) => {
                     const badgeCls = GRADE_COLORS[sub.grade] || "bg-gray-100 text-gray-700";
                     return (
-                      <tr
-                        key={i}
-                        className={`border-t ${i % 2 === 0 ? "" : "bg-gray-50"}`}
-                      >
+                      <tr key={i} className={`border-t ${i % 2 === 0 ? "" : "bg-gray-50"}`}>
                         <td className="p-2 font-medium">{sub.subject}</td>
                         <td className="p-2 text-center">{sub.class_score ?? "—"}</td>
                         <td className="p-2 text-center">{sub.reopen      ?? "—"}</td>
                         <td className="p-2 text-center">{sub.exams       ?? "—"}</td>
-                        <td className="p-2 text-center font-bold text-green-800">
-                          {sub.score}
-                        </td>
+                        <td className="p-2 text-center font-bold text-green-800">{sub.score}</td>
                         {report.show_position && (
                           <td className="p-2 text-center font-semibold">
                             {sub.subject_position ?? "—"}
@@ -409,38 +450,38 @@ const Reports = () => {
               </table>
             </div>
 
-            {/* Grading scale footer */}
+            {/* Grading scale */}
             <div className="mt-4 p-3 bg-green-50 rounded border border-green-100 text-xs text-gray-600">
               <p className="font-semibold text-green-800 mb-2">GRADING KEY</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
                 {gradeScale.map((g) => (
-                  <span key={g.grade}>
+                  <span key={g.grade + g.range}>
                     {g.range}: <b>{g.grade} – {g.label}</b>
                   </span>
                 ))}
               </div>
             </div>
 
-            {/* Term dates */}
-            {(report.vacation_date || report.resumption_date) && (
+            {/* Term dates display */}
+            {(report.vacation_date_display || report.resumption_date_display) && (
               <div className="mt-3 flex gap-6 text-xs text-gray-500">
-                {report.vacation_date && (
+                {report.vacation_date_display && (
                   <span>
                     <span className="font-semibold text-gray-600">School Vacates On:</span>{" "}
-                    {report.vacation_date}
+                    {report.vacation_date_display}
                   </span>
                 )}
-                {report.resumption_date && (
+                {report.resumption_date_display && (
                   <span>
                     <span className="font-semibold text-gray-600">School Re-opens On:</span>{" "}
-                    {report.resumption_date}
+                    {report.resumption_date_display}
                   </span>
                 )}
               </div>
             )}
           </div>
 
-          {/* ── Attendance + Remarks ── */}
+          {/* Attendance + Remarks */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 px-6 pb-6">
 
             {/* Attendance */}
@@ -477,7 +518,6 @@ const Reports = () => {
               <h3 className="font-semibold text-gray-700 mb-3">Teacher's Remarks</h3>
               <div className="space-y-3">
 
-                {/* Conduct */}
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Conduct</label>
                   <select
@@ -492,7 +532,6 @@ const Reports = () => {
                   </select>
                 </div>
 
-                {/* Attitude */}
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Attitude</label>
                   <select
@@ -507,7 +546,6 @@ const Reports = () => {
                   </select>
                 </div>
 
-                {/* Interest */}
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">
                     Interest{" "}
@@ -525,7 +563,6 @@ const Reports = () => {
                   </select>
                 </div>
 
-                {/* Teacher's overall remark */}
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Class Teacher Remarks</label>
                   <textarea
@@ -537,7 +574,6 @@ const Reports = () => {
                   />
                 </div>
 
-                {/* Promoted to */}
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Promoted To</label>
                   <input
@@ -549,7 +585,6 @@ const Reports = () => {
                   />
                 </div>
 
-                {/* Term dates */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">School Vacates On</label>
@@ -571,7 +606,6 @@ const Reports = () => {
                   </div>
                 </div>
 
-                {/* Save */}
                 <div className="flex items-center gap-3">
                   <button
                     onClick={saveRemarks}
