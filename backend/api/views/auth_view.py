@@ -90,23 +90,33 @@ def _resolve_username(identifier: str) -> str:
     or a teacher ID and resolve it to the underlying auth username.
     Returns the original identifier unchanged if no match is found.
     """
+    # 1. Direct username match
     if User.objects.filter(username=identifier).exists():
         return identifier
 
-    # Try admission number (TRS- prefix)
+    # 2. Student admission number (TRS- prefix)
     try:
         student = Student.objects.get(admission_number__iexact=identifier)
+        logger.info(
+            "Resolved admission number '%s' → username '%s'",
+            identifier, student.user.username,
+        )
         return student.user.username
     except Student.DoesNotExist:
         pass
 
-    # Try teacher ID
+    # 3. Teacher ID
     try:
         teacher = Teacher.objects.get(teacher_id__iexact=identifier)
+        logger.info(
+            "Resolved teacher ID '%s' → username '%s'",
+            identifier, teacher.user.username,
+        )
         return teacher.user.username
     except Teacher.DoesNotExist:
         pass
 
+    logger.warning("Could not resolve identifier '%s' to any user.", identifier)
     return identifier
 
 
