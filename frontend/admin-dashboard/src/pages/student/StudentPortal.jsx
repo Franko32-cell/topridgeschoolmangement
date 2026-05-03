@@ -1,11 +1,65 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { getUser, logout } from "../../services/auth";
 import API from "../../services/api";
 import AnnouncementsFeed from "../AnnouncementsFeed";
 
-/* ─────────────────────────────────────────────
-   Global styles (injected once)
-───────────────────────────────────────────── */
+
+// ─────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────
+
+const TERMS = [
+  { value: "term1", label: "Term 1", icon: "📘" },
+  { value: "term2", label: "Term 2", icon: "📗" },
+  { value: "term3", label: "Term 3", icon: "📙" },
+];
+
+const TABS = [
+  { key: "Results",       icon: "📊", label: "Results"       },
+  { key: "Progress",      icon: "📈", label: "Progress"      },
+  { key: "Report Card",   icon: "📄", label: "Report Card"   },
+  { key: "Fees",          icon: "💳", label: "Fees"          },
+  { key: "Announcements", icon: "📢", label: "Announcements" },
+];
+
+/** Tabs that show the term selector bar */
+const TABS_WITH_TERM_BAR = new Set(["Results", "Report Card"]);
+
+/** Tabs that do NOT show the term bar */
+const TABS_WITHOUT_TERM_BAR = new Set(["Progress", "Announcements", "Fees"]);
+
+const ROLE_ROUTES = {
+  admin:   "/admin",
+  teacher: "/teacher",
+  student: "/student",
+};
+
+const SUBJECT_PALETTE = [
+  "#2563eb", "#16a34a", "#d97706", "#dc2626",
+  "#7c3aed", "#0891b2", "#ea580c", "#65a30d",
+  "#db2777", "#4f46e5",
+];
+
+const GRADE_COLORS = {
+  "1":  { bg: "#dcfce7", color: "#166534" },
+  "2":  { bg: "#d1fae5", color: "#065f46" },
+  "3":  { bg: "#dbeafe", color: "#1e40af" },
+  "4":  { bg: "#cffafe", color: "#164e63" },
+  "5":  { bg: "#fef9c3", color: "#854d0e" },
+  "6":  { bg: "#ffedd5", color: "#9a3412" },
+  "7":  { bg: "#fee2e2", color: "#991b1b" },
+  "8":  { bg: "#fecaca", color: "#7f1d1d" },
+  "9":  { bg: "#fca5a5", color: "#450a0a" },
+  "A":  { bg: "#dcfce7", color: "#166534" },
+  "B":  { bg: "#d1fae5", color: "#065f46" },
+  "C":  { bg: "#dbeafe", color: "#1e40af" },
+  "D":  { bg: "#cffafe", color: "#164e63" },
+  "E2": { bg: "#ffedd5", color: "#9a3412" },
+  "E3": { bg: "#fee2e2", color: "#991b1b" },
+  "E4": { bg: "#fecaca", color: "#7f1d1d" },
+  "E5": { bg: "#fca5a5", color: "#450a0a" },
+};
+
 const PORTAL_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap');
 
@@ -176,34 +230,10 @@ const PORTAL_STYLES = `
   .sp-status-partial { background: #fef9c3; color: #854d0e; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
   .sp-status-unpaid  { background: #fee2e2; color: #991b1b; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
 
-  /* ── Fee Overview Banner ── */
-  .sp-fee-overview {
-    background: linear-gradient(135deg, #0a0f1e 0%, #1e293b 100%);
-    border-radius: 18px;
-    padding: 24px 24px 20px;
-    margin-bottom: 16px;
-    color: #fff;
-    position: relative;
-    overflow: hidden;
-  }
-  .sp-fee-overview::before {
-    content: '';
-    position: absolute;
-    top: -40px; right: -40px;
-    width: 180px; height: 180px;
-    border-radius: 50%;
-    background: rgba(37,99,235,.18);
-    pointer-events: none;
-  }
-  .sp-fee-overview::after {
-    content: '';
-    position: absolute;
-    bottom: -30px; left: 60px;
-    width: 120px; height: 120px;
-    border-radius: 50%;
-    background: rgba(22,163,74,.12);
-    pointer-events: none;
-  }
+  /* Fee Overview Banner */
+  .sp-fee-overview { background: linear-gradient(135deg, #0a0f1e 0%, #1e293b 100%); border-radius: 18px; padding: 24px 24px 20px; margin-bottom: 16px; color: #fff; position: relative; overflow: hidden; }
+  .sp-fee-overview::before { content: ''; position: absolute; top: -40px; right: -40px; width: 180px; height: 180px; border-radius: 50%; background: rgba(37,99,235,.18); pointer-events: none; }
+  .sp-fee-overview::after { content: ''; position: absolute; bottom: -30px; left: 60px; width: 120px; height: 120px; border-radius: 50%; background: rgba(22,163,74,.12); pointer-events: none; }
   .sp-fee-overview-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.45); margin-bottom: 6px; }
   .sp-fee-overview-total { font-size: 36px; font-weight: 900; letter-spacing: -2px; line-height: 1; font-family: 'DM Mono', monospace; color: #fff; }
   .sp-fee-overview-sub { font-size: 13px; color: rgba(255,255,255,.45); margin-top: 4px; }
@@ -213,48 +243,20 @@ const PORTAL_STYLES = `
   .sp-fee-overview-stat-val { font-size: 17px; font-weight: 800; font-family: 'DM Mono', monospace; color: #fff; line-height: 1; }
   .sp-fee-overview-stat-lbl { font-size: 10px; font-weight: 600; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
 
-  /* ── Fee term card ── */
-  .sp-fee-card {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    margin-bottom: 12px;
-    overflow: hidden;
-    transition: box-shadow .2s;
-  }
+  /* Fee term card */
+  .sp-fee-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 12px; overflow: hidden; transition: box-shadow .2s; }
   .sp-fee-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.07); }
-  .sp-fee-card-header {
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    user-select: none;
-  }
+  .sp-fee-card-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
   .sp-fee-card-header:hover { background: #fafbfc; }
   .sp-fee-card-left { display: flex; align-items: center; gap: 12px; }
-  .sp-fee-term-icon {
-    width: 40px; height: 40px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; flex-shrink: 0;
-  }
+  .sp-fee-term-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
   .sp-fee-term-name { font-weight: 700; font-size: 14px; color: var(--navy-2); }
   .sp-fee-term-meta { font-size: 12px; color: var(--dim); margin-top: 1px; }
   .sp-fee-card-right { display: flex; align-items: center; gap: 10px; }
   .sp-fee-chevron { color: var(--dim); transition: transform .25s; font-size: 16px; line-height: 1; }
   .sp-fee-chevron.open { transform: rotate(180deg); }
-
-  .sp-fee-card-body {
-    border-top: 1px solid var(--line);
-    overflow: hidden;
-    transition: max-height .3s ease, opacity .3s ease;
-    max-height: 0;
-    opacity: 0;
-  }
-  .sp-fee-card-body.open {
-    max-height: 1200px;
-    opacity: 1;
-  }
+  .sp-fee-card-body { border-top: 1px solid var(--line); overflow: hidden; transition: max-height .3s ease, opacity .3s ease; max-height: 0; opacity: 0; }
+  .sp-fee-card-body.open { max-height: 1200px; opacity: 1; }
   .sp-fee-body-inner { padding: 16px 20px 20px; }
 
   /* Progress bar inside fee card */
@@ -274,122 +276,41 @@ const PORTAL_STYLES = `
   .sp-fee-line-balance { color: var(--red); font-weight: 800; font-size: 14px; }
 
   /* Pay button */
-  .sp-pay-btn {
-    width: 100%;
-    background: linear-gradient(135deg, #00b8e6 0%, #0070f3 100%);
-    color: #fff;
-    border: none;
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 15px;
-    font-weight: 700;
-    font-family: 'Outfit', sans-serif;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    transition: all .2s;
-    letter-spacing: .2px;
-  }
-  .sp-pay-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,112,243,.3);
-  }
+  .sp-pay-btn { width: 100%; background: linear-gradient(135deg, #00b8e6 0%, #0070f3 100%); color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 700; font-family: 'Outfit', sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px; transition: all .2s; letter-spacing: .2px; }
+  .sp-pay-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,112,243,.3); }
   .sp-pay-btn:active { transform: translateY(0); }
   .sp-pay-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-  .sp-pay-btn-paid {
-    width: 100%;
-    background: var(--green-l);
-    color: var(--green);
-    border: 1.5px solid #bbf7d0;
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 14px;
-    font-weight: 700;
-    font-family: 'Outfit', sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    cursor: default;
-  }
-  .sp-paystack-badge {
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    font-size: 11px; color: var(--dim); margin-top: 8px;
-  }
+  .sp-pay-btn-paid { width: 100%; background: var(--green-l); color: var(--green); border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 700; font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: default; }
+  .sp-paystack-badge { display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 11px; color: var(--dim); margin-top: 8px; }
 
-  /* ── Payment modal ── */
+  /* Payment modal */
   .sp-pay-modal { max-width: 400px; }
-  .sp-pay-modal-header {
-    background: linear-gradient(135deg, #0a0f1e, #1e3a5f);
-    margin: -28px -28px 20px;
-    padding: 24px 28px 20px;
-    border-radius: 18px 18px 0 0;
-    color: #fff;
-  }
+  .sp-pay-modal-header { background: linear-gradient(135deg, #0a0f1e, #1e3a5f); margin: -28px -28px 20px; padding: 24px 28px 20px; border-radius: 18px 18px 0 0; color: #fff; }
   .sp-pay-modal-term { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.45); margin-bottom: 4px; }
   .sp-pay-modal-balance { font-size: 32px; font-weight: 900; font-family: 'DM Mono', monospace; letter-spacing: -1.5px; }
   .sp-pay-modal-balance-lbl { font-size: 12px; color: rgba(255,255,255,.45); margin-top: 2px; }
-
   .sp-amount-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-  .sp-amount-option {
-    border: 1.5px solid var(--line);
-    border-radius: 10px;
-    padding: 10px 12px;
-    cursor: pointer;
-    transition: all .15s;
-    background: #fff;
-    text-align: left;
-  }
+  .sp-amount-option { border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: all .15s; background: #fff; text-align: left; }
   .sp-amount-option:hover { border-color: var(--blue); background: var(--blue-l); }
   .sp-amount-option.selected { border-color: var(--blue); background: var(--blue-l); }
   .sp-amount-option-label { font-size: 10.5px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
   .sp-amount-option-val { font-size: 16px; font-weight: 800; color: var(--navy-2); font-family: 'DM Mono', monospace; }
-
   .sp-custom-amount-wrap { margin-bottom: 14px; }
   .sp-custom-amount-input-row { display: flex; align-items: center; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; transition: border-color .15s; background: #fff; }
   .sp-custom-amount-input-row:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
   .sp-custom-amount-prefix { padding: 10px 14px; font-size: 14px; font-weight: 700; color: var(--muted); background: #f8fafc; border-right: 1.5px solid var(--line); font-family: 'DM Mono', monospace; }
   .sp-custom-amount-input { flex: 1; border: none; outline: none; padding: 10px 14px; font-size: 16px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--navy-2); background: transparent; }
   .sp-amount-error { font-size: 12px; color: var(--red); margin-top: 5px; }
-
-  .sp-pay-confirm-btn {
-    width: 100%;
-    background: linear-gradient(135deg, #00b8e6 0%, #0070f3 100%);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 13px;
-    font-size: 14px;
-    font-weight: 700;
-    font-family: 'Outfit', sans-serif;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all .2s;
-    margin-top: 4px;
-  }
+  .sp-pay-confirm-btn { width: 100%; background: linear-gradient(135deg, #00b8e6 0%, #0070f3 100%); color: #fff; border: none; border-radius: 10px; padding: 13px; font-size: 14px; font-weight: 700; font-family: 'Outfit', sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all .2s; margin-top: 4px; }
   .sp-pay-confirm-btn:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(0,112,243,.3); }
   .sp-pay-confirm-btn:disabled { opacity: .5; cursor: not-allowed; }
 
-  /* ── Transaction history ── */
+  /* Transaction history */
   .sp-txn-section { margin-top: 16px; }
   .sp-txn-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--dim); margin-bottom: 10px; }
   .sp-txn-empty { text-align: center; padding: 20px; font-size: 13px; color: var(--dim); background: #f8fafc; border-radius: 10px; }
   .sp-txn-list { display: flex; flex-direction: column; gap: 6px; }
-  .sp-txn-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    background: #f8fafc;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    transition: background .15s;
-  }
+  .sp-txn-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #f8fafc; border-radius: 10px; border: 1px solid var(--line); transition: background .15s; }
   .sp-txn-item:hover { background: var(--blue-l); border-color: #bfdbfe; }
   .sp-txn-icon { width: 34px; height: 34px; border-radius: 8px; background: #dcfce7; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px; }
   .sp-txn-info { flex: 1; min-width: 0; }
@@ -398,159 +319,249 @@ const PORTAL_STYLES = `
   .sp-txn-note { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sp-txn-by { font-size: 11px; color: var(--dim); white-space: nowrap; }
 
-  /* ── Success flash ── */
-  .sp-pay-success-overlay {
-    position: fixed; inset: 0; z-index: 200;
-    background: rgba(0,0,0,.6);
-    backdrop-filter: blur(6px);
-    display: flex; align-items: center; justify-content: center;
-    animation: sp-fade-in .2s ease;
-  }
-  .sp-pay-success-box {
-    background: #fff;
-    border-radius: 24px;
-    padding: 40px 36px;
-    text-align: center;
-    max-width: 340px;
-    width: 90%;
-    animation: sp-slide-up .25s ease;
-  }
-  .sp-pay-success-icon {
-    width: 72px; height: 72px; border-radius: 50%;
-    background: var(--green-l);
-    display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 18px;
-    font-size: 32px;
-  }
+  /* Success flash */
+  .sp-pay-success-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; animation: sp-fade-in .2s ease; }
+  .sp-pay-success-box { background: #fff; border-radius: 24px; padding: 40px 36px; text-align: center; max-width: 340px; width: 90%; animation: sp-slide-up .25s ease; }
+  .sp-pay-success-icon { width: 72px; height: 72px; border-radius: 50%; background: var(--green-l); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 32px; }
   .sp-pay-success-title { font-size: 22px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
   .sp-pay-success-amount { font-size: 32px; font-weight: 900; font-family: 'DM Mono', monospace; color: var(--green); letter-spacing: -1px; margin-bottom: 8px; }
   .sp-pay-success-sub { font-size: 13px; color: var(--dim); margin-bottom: 24px; line-height: 1.6; }
   .sp-pay-success-btn { width: 100%; background: var(--navy); color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 700; font-family: 'Outfit', sans-serif; cursor: pointer; }
-
-  /* Paystack lock icon */
-  .sp-lock-icon { display: inline-flex; align-items: center; gap: 4px; }
-
-  /* Gateway error box */
-  .sp-gateway-err {
-    background: #fff8f0;
-    border: 1px solid #fed7aa;
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: #9a3412;
-    margin-top: 8px;
-    line-height: 1.5;
-  }
+  .sp-gateway-err { background: #fff8f0; border: 1px solid #fed7aa; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #9a3412; margin-top: 8px; line-height: 1.5; }
 `;
 
-/* ─────────────────────────────────────────────
-   Paystack loader
-───────────────────────────────────────────── */
-const loadPaystack = () =>
-  new Promise((resolve, reject) => {
-    if (window.PaystackPop) return resolve(window.PaystackPop);
 
-    const existing = document.querySelector('script[src*="paystack"]');
-    if (existing) {
-      let attempts = 0;
-      const poll = setInterval(() => {
-        attempts++;
-        if (window.PaystackPop) {
-          clearInterval(poll);
-          resolve(window.PaystackPop);
-        } else if (attempts > 50) {
-          clearInterval(poll);
-          reject(new Error("Paystack SDK timed out. Please refresh and try again."));
-        }
-      }, 100);
-      return;
-    }
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
 
-    const script = document.createElement("script");
-    script.src = "https://js.paystack.co/v1/inline.js";
-    script.async = true;
-    script.onload = () => {
-      if (window.PaystackPop) {
-        resolve(window.PaystackPop);
-      } else {
-        reject(new Error("Paystack loaded but PaystackPop is unavailable. Try disabling your ad-blocker."));
-      }
-    };
-    script.onerror = () => {
-      reject(new Error("Failed to load Paystack script. Check your internet connection or disable any ad-blocker."));
-    };
-    document.head.appendChild(script);
-  });
-
-/* ─────────────────────────────────────────────
-   Constants
-───────────────────────────────────────────── */
-const TERMS = [
-  { value: "term1", label: "Term 1", icon: "📘" },
-  { value: "term2", label: "Term 2", icon: "📗" },
-  { value: "term3", label: "Term 3", icon: "📙" },
-];
-
-const GRADE_COLORS = {
-  "1":  { bg: "#dcfce7", color: "#166534" },
-  "2":  { bg: "#d1fae5", color: "#065f46" },
-  "3":  { bg: "#dbeafe", color: "#1e40af" },
-  "4":  { bg: "#cffafe", color: "#164e63" },
-  "5":  { bg: "#fef9c3", color: "#854d0e" },
-  "6":  { bg: "#ffedd5", color: "#9a3412" },
-  "7":  { bg: "#fee2e2", color: "#991b1b" },
-  "8":  { bg: "#fecaca", color: "#7f1d1d" },
-  "9":  { bg: "#fca5a5", color: "#450a0a" },
-  "A":  { bg: "#dcfce7", color: "#166534" },
-  "B":  { bg: "#d1fae5", color: "#065f46" },
-  "C":  { bg: "#dbeafe", color: "#1e40af" },
-  "D":  { bg: "#cffafe", color: "#164e63" },
-  "E2": { bg: "#ffedd5", color: "#9a3412" },
-  "E3": { bg: "#fee2e2", color: "#991b1b" },
-  "E4": { bg: "#fecaca", color: "#7f1d1d" },
-  "E5": { bg: "#fca5a5", color: "#450a0a" },
-};
-
-const SUBJECT_PALETTE = [
-  "#2563eb","#16a34a","#d97706","#dc2626",
-  "#7c3aed","#0891b2","#ea580c","#65a30d",
-  "#db2777","#4f46e5",
-];
-
-const TABS = [
-  { key: "Results",       icon: "📊", label: "Results"       },
-  { key: "Progress",      icon: "📈", label: "Progress"      },
-  { key: "Report Card",   icon: "📄", label: "Report Card"   },
-  { key: "Fees",          icon: "💳", label: "Fees"          },
-  { key: "Announcements", icon: "📢", label: "Announcements" },
-];
-
-/* ─────────────────────────────────────────────
-   Helpers
-───────────────────────────────────────────── */
+/** Format a number as GHS currency string */
 const fmt = (v) =>
   Number(v || 0).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Format a date string for display */
+const fmtDate = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-GH", {
+        day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : "—";
+
+/** Look up a term's info by value, with a safe fallback */
+const findTerm = (value) =>
+  TERMS.find((t) => t.value === value) ?? { label: value, icon: "💳" };
+
+/** Shorten "Term 1" → "T1" for chart axis labels */
+const termShortLabel = (value) =>
+  findTerm(value).label.replace("Term ", "T");
+
+/** Password strength scorer */
 function pwStrength(pw) {
-  if (!pw) return { score: 0, label: "", color: "transparent" };
+  if (!pw) return { score: 0, label: "", color: "transparent", w: "0%" };
   let s = 0;
   if (pw.length >= 8)           s++;
   if (/[A-Z]/.test(pw))         s++;
   if (/[0-9]/.test(pw))         s++;
   if (/[^A-Za-z0-9]/.test(pw)) s++;
   const map = [
-    { label: "Too short", color: "#f87171", w: "25%" },
-    { label: "Weak",      color: "#fb923c", w: "40%" },
-    { label: "Fair",      color: "#fbbf24", w: "60%" },
-    { label: "Good",      color: "#34d399", w: "80%" },
+    { label: "Too short", color: "#f87171", w: "25%"  },
+    { label: "Weak",      color: "#fb923c", w: "40%"  },
+    { label: "Fair",      color: "#fbbf24", w: "60%"  },
+    { label: "Good",      color: "#34d399", w: "80%"  },
     { label: "Strong",    color: "#16a34a", w: "100%" },
   ];
   return { score: s, ...map[Math.min(s, map.length - 1)] };
 }
 
-/* ─────────────────────────────────────────────
-   Eye icon
-───────────────────────────────────────────── */
+/** Resolve an API error response to a readable string */
+const resolveApiError = (err, fallback = "An error occurred.") => {
+  const data = err?.response?.data;
+  return (
+    data?.old_password?.[0] ||
+    data?.new_password?.[0] ||
+    data?.error ||
+    data?.detail ||
+    fallback
+  );
+};
+
+/** Build SVG polyline points from an array of scores */
+function buildChartPoints(scores, { W, H, PAD }) {
+  const min   = Math.max(0,   Math.min(...scores) - 12);
+  const max   = Math.min(100, Math.max(...scores) + 12);
+  const range = max - min || 1;
+  return scores.map((score, i) => ({
+    x:     PAD + (i / Math.max(scores.length - 1, 1)) * (W - PAD * 2),
+    y:     PAD + (1 - (score - min) / range) * (H - PAD * 2),
+    score,
+  }));
+}
+
+
+// ─────────────────────────────────────────────
+// Paystack loader  (singleton promise)
+// ─────────────────────────────────────────────
+
+const loadPaystack = (() => {
+  let cached = null;
+  return () => {
+    if (cached) return cached;
+    cached = new Promise((resolve, reject) => {
+      if (window.PaystackPop) return resolve(window.PaystackPop);
+
+      const existing = document.querySelector('script[src*="paystack"]');
+      if (existing) {
+        let attempts = 0;
+        const poll = setInterval(() => {
+          if (window.PaystackPop) { clearInterval(poll); resolve(window.PaystackPop); }
+          else if (++attempts > 50) { clearInterval(poll); reject(new Error("Paystack SDK timed out. Please refresh and try again.")); }
+        }, 100);
+        return;
+      }
+
+      const script    = document.createElement("script");
+      script.src      = "https://js.paystack.co/v1/inline.js";
+      script.async    = true;
+      script.onload   = () => window.PaystackPop ? resolve(window.PaystackPop) : reject(new Error("Paystack loaded but PaystackPop is unavailable. Try disabling your ad-blocker."));
+      script.onerror  = () => reject(new Error("Failed to load Paystack. Check your connection or disable any ad-blocker."));
+      document.head.appendChild(script);
+    });
+    return cached;
+  };
+})();
+
+
+// ─────────────────────────────────────────────
+// Custom hooks
+// ─────────────────────────────────────────────
+
+/** Fetch a single term's report, or null if not found */
+function useReport(studentId, term, enabled) {
+  const [report, setReport]   = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const fetch = useCallback(async () => {
+    if (!enabled) return;
+    setLoading(true); setError(""); setReport(null);
+    try {
+      const r = await API.get(`/report/student/${studentId}/?term=${term}`);
+      setReport(r.data);
+    } catch {
+      setError("No report found for this term.");
+    } finally {
+      setLoading(false);
+    }
+  }, [studentId, term, enabled]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { report, loading, error, setError };
+}
+
+/** Fetch all three terms' reports for the Progress tab */
+function useAllReports(studentId, enabled) {
+  const [allReports, setAllReports]   = useState({});
+  const [loading, setLoading]         = useState(false);
+  const [loaded, setLoaded]           = useState(false);
+
+  const fetch = useCallback(async () => {
+    if (!enabled || loaded) return;
+    setLoading(true);
+    const results = {};
+    await Promise.all(
+      TERMS.map(async ({ value }) => {
+        try {
+          const r = await API.get(`/report/student/${studentId}/?term=${value}`);
+          results[value] = r.data;
+        } catch { /* term not available yet — skip silently */ }
+      })
+    );
+    setAllReports(results);
+    setLoaded(true);
+    setLoading(false);
+  }, [studentId, enabled, loaded]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { allReports, loading, loaded };
+}
+
+/** Fetch student fee records */
+function useFees(studentId, enabled) {
+  const [fees, setFees]       = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const fetch = useCallback(async () => {
+    if (!enabled) return;
+    setLoading(true); setError("");
+    try {
+      const r = await API.get(`/fees/?student=${studentId}`);
+      setFees(r.data.results ?? r.data);
+    } catch {
+      setError("Failed to load fees.");
+    } finally {
+      setLoading(false);
+    }
+  }, [studentId, enabled]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { fees, loading, error, setError, refetch: fetch };
+}
+
+
+// ─────────────────────────────────────────────
+// Primitive UI components
+// ─────────────────────────────────────────────
+
+const Spinner = () => (
+  <div style={{ width:"15px", height:"15px", border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"sp-spin .6s linear infinite" }} />
+);
+
+const Loading = memo(({ text = "Loading…" }) => (
+  <div className="sp-loading">
+    <div className="sp-spinner" />
+    {text}
+  </div>
+));
+
+const Empty = memo(({ icon, title, sub }) => (
+  <div className="sp-empty">
+    <div className="sp-empty-icon">{icon}</div>
+    <h3>{title}</h3>
+    {sub && <p>{sub}</p>}
+  </div>
+));
+
+const KpiCard = memo(({ label, value, sub }) => (
+  <div className="sp-kpi">
+    <div className="sp-kpi-value">{value ?? "—"}</div>
+    {sub && <div className="sp-kpi-sub">{sub}</div>}
+    <div className="sp-kpi-label">{label}</div>
+  </div>
+));
+
+const GradeBadge = memo(({ grade }) => {
+  const c = GRADE_COLORS[grade];
+  return (
+    <span className="sp-badge" style={c ? { background: c.bg, color: c.color } : { background:"#f1f5f9", color:"#64748b" }}>
+      {grade ?? "—"}
+    </span>
+  );
+});
+
+const RemarkBadge = memo(({ grade, remark }) => {
+  const c = GRADE_COLORS[grade];
+  return (
+    <span className="sp-badge" style={c ? { background: c.bg, color: c.color, fontWeight:500, fontFamily:"'Outfit',sans-serif" } : { background:"#f1f5f9", color:"#94a3b8" }}>
+      {remark ?? "—"}
+    </span>
+  );
+});
+
 const EyeIcon = ({ open }) =>
   open ? (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -564,16 +575,88 @@ const EyeIcon = ({ open }) =>
     </svg>
   );
 
-/* ─────────────────────────────────────────────
-   Change Password Modal
-───────────────────────────────────────────── */
-const ChangePasswordModal = ({ onClose }) => {
+/** Reusable password input with show/hide toggle */
+const PasswordInput = ({ value, onChange, placeholder, style }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="sp-modal-input-wrap">
+      <input
+        type={show ? "text" : "password"}
+        className="sp-modal-input"
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        style={style}
+      />
+      <button className="sp-modal-eye" type="button" onClick={() => setShow((v) => !v)}>
+        <EyeIcon open={show} />
+      </button>
+    </div>
+  );
+};
+
+const LockIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0110 0v4"/>
+  </svg>
+);
+
+const CardIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+    <line x1="1" y1="10" x2="23" y2="10"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+);
+
+const PaystackBadge = () => (
+  <div className="sp-paystack-badge">
+    <LockIcon /> Secured by Paystack · Mobile Money &amp; Cards accepted
+  </div>
+);
+
+const ModalCloseBtn = ({ onClose, dark = false }) => (
+  <button
+    onClick={onClose}
+    style={{
+      background: dark ? "rgba(255,255,255,.1)" : "none",
+      border: "none",
+      cursor: "pointer",
+      color: dark ? "rgba(255,255,255,.7)" : "#94a3b8",
+      fontSize: "18px",
+      padding: dark ? "4px 8px" : "2px",
+      borderRadius: dark ? "6px" : 0,
+      lineHeight: 1,
+    }}
+  >
+    ×
+  </button>
+);
+
+
+// ─────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────
+
+const ChangePasswordModal = memo(({ onClose }) => {
   const [current, setCurrent] = useState("");
   const [next, setNext]       = useState("");
   const [confirm, setConfirm] = useState("");
-  const [showCur, setShowCur] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showCon, setShowCon] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState("");
   const [success, setSuccess] = useState(false);
@@ -583,66 +666,57 @@ const ChangePasswordModal = ({ onClose }) => {
 
   const handleSubmit = async () => {
     setError("");
-    if (!current)         return setError("Enter your current password.");
-    if (next.length < 8)  return setError("New password must be at least 8 characters.");
-    if (next !== confirm)  return setError("New passwords do not match.");
+    if (!current)           return setError("Enter your current password.");
+    if (next.length < 8)    return setError("New password must be at least 8 characters.");
+    if (next !== confirm)   return setError("New passwords do not match.");
+    if (next === current)   return setError("New password must differ from your current password.");
+
     setSaving(true);
     try {
       await API.post("/auth/change-password/", { old_password: current, new_password: next });
       setSuccess(true);
       setTimeout(onClose, 2200);
     } catch (e) {
-      const data = e.response?.data;
-      setError(
-        data?.old_password?.[0] || data?.new_password?.[0] ||
-        data?.detail || "Failed to change password."
-      );
+      setError(resolveApiError(e, "Failed to change password."));
     } finally {
       setSaving(false);
     }
   };
 
+  const clearError = () => setError("");
+
   return (
-    <div className="sp-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="sp-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sp-modal">
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"18px" }}>
           <div>
             <p className="sp-modal-title">Change Password</p>
             <p className="sp-modal-sub">Keep your account secure with a strong password.</p>
           </div>
-          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:"20px", padding:"2px", lineHeight:1 }}>×</button>
+          <ModalCloseBtn onClose={onClose} />
         </div>
+
         {success ? (
           <div className="sp-pw-success">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-              <polyline points="22 4 12 14.01 9 11.01"/>
-            </svg>
-            Password changed successfully!
+            <CheckIcon /> Password changed successfully!
           </div>
         ) : (
           <>
             <div className="sp-modal-field">
               <label className="sp-field-label">Current Password</label>
-              <div className="sp-modal-input-wrap">
-                <input type={showCur ? "text" : "password"} className="sp-modal-input"
-                  placeholder="Enter current password" value={current}
-                  onChange={e => { setCurrent(e.target.value); setError(""); }} />
-                <button className="sp-modal-eye" onClick={() => setShowCur(v => !v)}>
-                  <EyeIcon open={showCur} />
-                </button>
-              </div>
+              <PasswordInput
+                value={current}
+                placeholder="Enter current password"
+                onChange={(e) => { setCurrent(e.target.value); clearError(); }}
+              />
             </div>
             <div className="sp-modal-field">
               <label className="sp-field-label">New Password</label>
-              <div className="sp-modal-input-wrap">
-                <input type={showNew ? "text" : "password"} className="sp-modal-input"
-                  placeholder="Min. 8 characters" value={next}
-                  onChange={e => { setNext(e.target.value); setError(""); }} />
-                <button className="sp-modal-eye" onClick={() => setShowNew(v => !v)}>
-                  <EyeIcon open={showNew} />
-                </button>
-              </div>
+              <PasswordInput
+                value={next}
+                placeholder="Min. 8 characters"
+                onChange={(e) => { setNext(e.target.value); clearError(); }}
+              />
               {next && (
                 <>
                   <div className="sp-pw-strength" style={{ background: strength.color, width: strength.w }} />
@@ -652,27 +726,22 @@ const ChangePasswordModal = ({ onClose }) => {
             </div>
             <div className="sp-modal-field">
               <label className="sp-field-label">Confirm New Password</label>
-              <div className="sp-modal-input-wrap">
-                <input type={showCon ? "text" : "password"} className="sp-modal-input"
-                  style={mismatch ? { borderColor:"#f87171" } : confirm && !mismatch ? { borderColor:"#34d399" } : {}}
-                  placeholder="Repeat new password" value={confirm}
-                  onChange={e => { setConfirm(e.target.value); setError(""); }} />
-                <button className="sp-modal-eye" onClick={() => setShowCon(v => !v)}>
-                  <EyeIcon open={showCon} />
-                </button>
-              </div>
+              <PasswordInput
+                value={confirm}
+                placeholder="Repeat new password"
+                onChange={(e) => { setConfirm(e.target.value); clearError(); }}
+                style={
+                  mismatch             ? { borderColor: "#f87171" } :
+                  confirm && !mismatch ? { borderColor: "#34d399" } : {}
+                }
+              />
               {mismatch && <p className="sp-pw-hint" style={{ color:"#f87171" }}>Passwords don't match</p>}
             </div>
             {error && <div className="sp-pw-error">{error}</div>}
             <div className="sp-modal-actions">
               <button className="sp-btn-secondary" onClick={onClose}>Cancel</button>
-              <button className="sp-btn-primary" onClick={handleSubmit} disabled={saving || mismatch}>
-                {saving ? (
-                  <>
-                    <div style={{ width:"15px", height:"15px", border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"sp-spin .6s linear infinite" }}/>
-                    Saving…
-                  </>
-                ) : "Update Password"}
+              <button className="sp-btn-primary" onClick={handleSubmit} disabled={saving || !!mismatch}>
+                {saving ? <><Spinner /> Saving…</> : "Update Password"}
               </button>
             </div>
           </>
@@ -680,23 +749,21 @@ const ChangePasswordModal = ({ onClose }) => {
       </div>
     </div>
   );
-};
+});
 
-/* ─────────────────────────────────────────────
-   Payment Modal — clean Paystack integration
-───────────────────────────────────────────── */
-const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
-  const termInfo  = TERMS.find(t => t.value === fee.term) || { label: fee.term, icon: "💳" };
+
+const PaymentModal = memo(({ fee, user, onClose, onSuccess }) => {
+  const termInfo  = findTerm(fee.term);
   const balance   = Number(fee.balance);
 
-  const [mode, setMode]             = useState("full");
-  const [custom, setCustom]         = useState("");
-  const [customErr, setCustomErr]   = useState("");
-  const [paying, setPaying]         = useState(false);
+  const [mode, setMode]           = useState("full");
+  const [custom, setCustom]       = useState("");
+  const [customErr, setCustomErr] = useState("");
+  const [paying, setPaying]       = useState(false);
   const [backendErr, setBackendErr] = useState("");
 
   const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-  const keyMissing  = !paystackKey || paystackKey.trim() === "";
+  const keyMissing  = !paystackKey?.trim();
 
   const payAmount = mode === "full" ? balance : parseFloat(custom) || 0;
 
@@ -704,9 +771,9 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
     if (payAmount <= 0) return "Payment amount must be greater than zero.";
     if (mode === "partial") {
       const v = parseFloat(custom);
-      if (!v || v <= 0)  return "Enter a valid amount.";
-      if (v > balance)   return `Amount cannot exceed balance of GHS ${fmt(balance)}.`;
-      if (v < 1)         return "Minimum payment is GHS 1.00.";
+      if (!v || v <= 0) return "Enter a valid amount.";
+      if (v > balance)  return `Amount cannot exceed balance of GHS ${fmt(balance)}.`;
+      if (v < 1)        return "Minimum payment is GHS 1.00.";
     }
     return null;
   };
@@ -716,21 +783,15 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
       setBackendErr("Payment gateway is not configured. Please contact the school administrator.");
       return;
     }
-
     const err = validate();
     if (err) { setCustomErr(err); return; }
 
-    setCustomErr("");
-    setBackendErr("");
-    setPaying(true);
+    setCustomErr(""); setBackendErr(""); setPaying(true);
 
-    // Load Paystack SDK first, then call setup() synchronously with plain
-    // (non-async) function references — Paystack's validator rejects async fns.
     let PaystackPop;
     try {
       PaystackPop = await loadPaystack();
     } catch (loadErr) {
-      console.error("Paystack load error:", loadErr);
       setBackendErr(loadErr.message || "Could not load payment gateway. Please try again.");
       setPaying(false);
       return;
@@ -740,32 +801,23 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
     const email           = `${admissionNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}@student.school.com`;
     const amountPesewas   = Math.round(payAmount * 100);
 
-    // Plain (non-async) function — satisfies Paystack's typeof check
-    function handleClose() {
-      setPaying(false);
-    }
+    // Must be plain (non-async) functions — Paystack's SDK validates typeof
+    function handleClose() { setPaying(false); }
 
-    // Plain function that fires async work internally
     function handleCallback(response) {
-      API.post(`/fees/${fee.id}/pay/`, {
-        amount: payAmount,
-        note:   `Paystack ref: ${response.reference}`,
-      })
-        .then(() => {
-          onSuccess(payAmount, response.reference);
-        })
+      API.post(`/fees/${fee.id}/pay/`, { amount: payAmount, note: `Paystack ref: ${response.reference}` })
+        .then(() => onSuccess(payAmount, response.reference))
         .catch((e) => {
-          const data = e.response?.data;
           setBackendErr(
-            data?.error || data?.detail ||
-            "Payment was received by Paystack but could not be saved. " +
-            "Please contact the school office with reference: " + response.reference
+            resolveApiError(e,
+              `Payment received by Paystack but could not be saved. Contact the school with ref: ${response.reference}`
+            )
           );
           setPaying(false);
         });
     }
 
-    const handler = PaystackPop.setup({
+    PaystackPop.setup({
       key:      paystackKey,
       email,
       amount:   amountPesewas,
@@ -779,18 +831,14 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
           { display_name: "Fee ID",        variable_name: "fee_id",           value: String(fee.id) },
         ],
       },
-      onClose:  handleClose,    // plain function ✅
-      callback: handleCallback, // plain function ✅
-    });
-
-    handler.openIframe();
+      onClose:  handleClose,
+      callback: handleCallback,
+    }).openIframe();
   };
 
   return (
-    <div className="sp-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="sp-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sp-modal sp-pay-modal">
-
-        {/* Header */}
         <div className="sp-pay-modal-header">
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
             <div>
@@ -798,37 +846,34 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
               <div className="sp-pay-modal-balance">GHS {fmt(balance)}</div>
               <div className="sp-pay-modal-balance-lbl">Outstanding balance</div>
             </div>
-            <button onClick={onClose} style={{ background:"rgba(255,255,255,.1)", border:"none", cursor:"pointer", color:"rgba(255,255,255,.7)", fontSize:"18px", padding:"4px 8px", borderRadius:"6px", lineHeight:1 }}>×</button>
+            <ModalCloseBtn onClose={onClose} dark />
           </div>
         </div>
 
-        {/* Key missing warning */}
         {keyMissing && (
           <div className="sp-gateway-err" style={{ marginBottom:"14px" }}>
             ⚠️ Payment gateway is not configured. Contact the school administrator.
           </div>
         )}
 
-        {/* Amount options */}
         <div className="sp-modal-field">
           <label className="sp-field-label">Payment amount</label>
           <div className="sp-amount-options">
-            <button
-              className={`sp-amount-option ${mode === "full" ? "selected" : ""}`}
-              onClick={() => { setMode("full"); setCustomErr(""); }}
-            >
-              <div className="sp-amount-option-label">Full balance</div>
-              <div className="sp-amount-option-val">GHS {fmt(balance)}</div>
-            </button>
-            <button
-              className={`sp-amount-option ${mode === "partial" ? "selected" : ""}`}
-              onClick={() => { setMode("partial"); setCustomErr(""); }}
-            >
-              <div className="sp-amount-option-label">Partial amount</div>
-              <div className="sp-amount-option-val" style={{ color: mode === "partial" && custom ? "#2563eb" : "#94a3b8" }}>
-                {mode === "partial" && custom ? `GHS ${fmt(custom)}` : "Enter amount"}
-              </div>
-            </button>
+            {[
+              { id: "full",    label: "Full balance",   val: `GHS ${fmt(balance)}` },
+              { id: "partial", label: "Partial amount",  val: mode === "partial" && custom ? `GHS ${fmt(custom)}` : "Enter amount" },
+            ].map(({ id, label, val }) => (
+              <button
+                key={id}
+                className={`sp-amount-option ${mode === id ? "selected" : ""}`}
+                onClick={() => { setMode(id); setCustomErr(""); }}
+              >
+                <div className="sp-amount-option-label">{label}</div>
+                <div className="sp-amount-option-val" style={id === "partial" && mode === "partial" && custom ? { color:"#2563eb" } : {}}>
+                  {val}
+                </div>
+              </button>
+            ))}
           </div>
 
           {mode === "partial" && (
@@ -843,7 +888,7 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
                   max={balance}
                   placeholder="0.00"
                   value={custom}
-                  onChange={e => { setCustom(e.target.value); setCustomErr(""); }}
+                  onChange={(e) => { setCustom(e.target.value); setCustomErr(""); }}
                   autoFocus
                 />
               </div>
@@ -854,43 +899,23 @@ const PaymentModal = ({ fee, user, onClose, onSuccess }) => {
 
         {backendErr && <div className="sp-gateway-err">{backendErr}</div>}
 
-        {/* Pay button */}
         <button
           className="sp-pay-confirm-btn"
           onClick={handlePay}
           disabled={paying || keyMissing || (mode === "partial" && !custom)}
         >
-          {paying ? (
-            <>
-              <div style={{ width:"16px", height:"16px", border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"sp-spin .6s linear infinite" }}/>
-              Opening Paystack…
-            </>
-          ) : (
-            <>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                <line x1="1" y1="10" x2="23" y2="10"/>
-              </svg>
-              Pay GHS {fmt(payAmount)}
-            </>
-          )}
+          {paying
+            ? <><Spinner /> Opening Paystack…</>
+            : <><CardIcon /> Pay GHS {fmt(payAmount)}</>}
         </button>
-        <div className="sp-paystack-badge">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0110 0v4"/>
-          </svg>
-          Secured by Paystack · Mobile Money &amp; Cards accepted
-        </div>
+        <PaystackBadge />
       </div>
     </div>
   );
-};
+});
 
-/* ─────────────────────────────────────────────
-   Payment Success overlay
-───────────────────────────────────────────── */
-const PaySuccessOverlay = ({ amount, reference, onClose }) => (
+
+const PaySuccessOverlay = memo(({ amount, reference, onClose }) => (
   <div className="sp-pay-success-overlay">
     <div className="sp-pay-success-box">
       <div className="sp-pay-success-icon">✅</div>
@@ -898,33 +923,29 @@ const PaySuccessOverlay = ({ amount, reference, onClose }) => (
       <div className="sp-pay-success-amount">GHS {fmt(amount)}</div>
       <div className="sp-pay-success-sub">
         Your payment has been recorded.<br/>
-        <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"11px", color:"#94a3b8" }}>Ref: {reference}</span>
+        <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"11px", color:"#94a3b8" }}>
+          Ref: {reference}
+        </span>
       </div>
       <button className="sp-pay-success-btn" onClick={onClose}>Done</button>
     </div>
   </div>
-);
+));
 
-/* ─────────────────────────────────────────────
-   Transaction history list
-───────────────────────────────────────────── */
-const TransactionHistory = ({ transactions }) => (
+
+const TransactionHistory = memo(({ transactions }) => (
   <div className="sp-txn-section">
     <div className="sp-txn-title">Payment history</div>
-    {!transactions || transactions.length === 0 ? (
+    {!transactions?.length ? (
       <div className="sp-txn-empty">No payments recorded yet</div>
     ) : (
       <div className="sp-txn-list">
-        {transactions.map(txn => (
+        {transactions.map((txn) => (
           <div key={txn.id} className="sp-txn-item">
             <div className="sp-txn-icon">💸</div>
             <div className="sp-txn-info">
               <div className="sp-txn-note">{txn.note || "Fee payment"}</div>
-              <div className="sp-txn-date">
-                {txn.created_at
-                  ? new Date(txn.created_at).toLocaleDateString("en-GH", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" })
-                  : "—"}
-              </div>
+              <div className="sp-txn-date">{fmtDate(txn.created_at)}</div>
             </div>
             <div style={{ textAlign:"right" }}>
               <div className="sp-txn-amount">+GHS {fmt(txn.amount)}</div>
@@ -935,75 +956,73 @@ const TransactionHistory = ({ transactions }) => (
       </div>
     )}
   </div>
-);
+));
 
-/* ─────────────────────────────────────────────
-   Fee Term Card (collapsible)
-───────────────────────────────────────────── */
-const FeeTermCard = ({ fee, user, onPaymentSuccess }) => {
-  const [open, setOpen]                 = useState(false);
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [localFee, setLocalFee]         = useState(fee);
 
+const FeeTermCard = memo(({ fee, user, onPaymentSuccess }) => {
+  const [open, setOpen]           = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [localFee, setLocalFee]   = useState(fee);
+
+  // Sync external fee prop changes (e.g. after refetch)
   useEffect(() => { setLocalFee(fee); }, [fee]);
 
-  const balance   = Number(localFee.balance);
-  const paid      = Number(localFee.paid);
-  const total     = Number(localFee.total_amount);
-  const isPaid    = balance <= 0;
-  const isPartial = !isPaid && paid > 0;
-  const pct       = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-  const termInfo  = TERMS.find(t => t.value === localFee.term) || { label: localFee.term, icon: "💳" };
+  const balance      = Number(localFee.balance);
+  const paid         = Number(localFee.paid);
+  const total        = Number(localFee.total_amount);
+  const isPaid       = balance <= 0;
+  const isPartial    = !isPaid && paid > 0;
+  const pct          = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+  const termInfo     = findTerm(localFee.term);
   const progressColor = isPaid ? "#16a34a" : isPartial ? "#d97706" : "#dc2626";
 
+  // Only show line items with a non-zero value
   const lineItems = [
-    { label: "School Fees",   value: localFee.amount },
+    { label: "School Fees",   value: localFee.amount        },
     { label: "Book User Fee", value: localFee.book_user_fee },
-    { label: "Workbook Fee",  value: localFee.workbook_fee },
-    { label: "Arrears",       value: localFee.arrears },
-  ].filter(r => Number(r.value) > 0);
+    { label: "Workbook Fee",  value: localFee.workbook_fee  },
+    { label: "Arrears",       value: localFee.arrears       },
+  ].filter((r) => Number(r.value) > 0);
 
   const handleSuccess = (amount, reference) => {
-    setShowPayModal(false);
-    setLocalFee(prev => {
-      const newPaid    = Number(prev.paid) + amount;
-      const newBalance = Number(prev.total_amount) - newPaid;
-      return {
-        ...prev,
-        paid:    newPaid,
-        balance: newBalance,
-        transactions: [
-          {
-            id:               Date.now(),
-            amount,
-            note:             `Paystack ref: ${reference}`,
-            recorded_by_name: "Online payment",
-            created_at:       new Date().toISOString(),
-          },
-          ...(prev.transactions || []),
-        ],
-      };
-    });
+    setShowModal(false);
+    // Optimistically update local state before the background refetch resolves
+    setLocalFee((prev) => ({
+      ...prev,
+      paid:    Number(prev.paid) + amount,
+      balance: Number(prev.total_amount) - (Number(prev.paid) + amount),
+      transactions: [
+        {
+          id:               Date.now(),
+          amount,
+          note:             `Paystack ref: ${reference}`,
+          recorded_by_name: "Online payment",
+          created_at:       new Date().toISOString(),
+        },
+        ...(prev.transactions ?? []),
+      ],
+    }));
     onPaymentSuccess(amount, reference);
   };
 
   return (
     <>
-      {showPayModal && (
+      {showModal && (
         <PaymentModal
           fee={localFee}
           user={user}
-          onClose={() => setShowPayModal(false)}
+          onClose={() => setShowModal(false)}
           onSuccess={handleSuccess}
         />
       )}
 
       <div className="sp-fee-card">
-        <div className="sp-fee-card-header" onClick={() => setOpen(o => !o)}>
+        <div className="sp-fee-card-header" onClick={() => setOpen((o) => !o)}>
           <div className="sp-fee-card-left">
-            <div className="sp-fee-term-icon" style={{
-              background: isPaid ? "#dcfce7" : isPartial ? "#fef9c3" : "#fee2e2"
-            }}>
+            <div
+              className="sp-fee-term-icon"
+              style={{ background: isPaid ? "#dcfce7" : isPartial ? "#fef9c3" : "#fee2e2" }}
+            >
               {termInfo.icon}
             </div>
             <div>
@@ -1014,12 +1033,9 @@ const FeeTermCard = ({ fee, user, onPaymentSuccess }) => {
             </div>
           </div>
           <div className="sp-fee-card-right">
-            {isPaid
-              ? <span className="sp-status-paid">✓ PAID</span>
-              : isPartial
-              ? <span className="sp-status-partial">◑ PARTIAL</span>
-              : <span className="sp-status-unpaid">✕ UNPAID</span>
-            }
+            {isPaid    ? <span className="sp-status-paid">✓ PAID</span>
+            : isPartial ? <span className="sp-status-partial">◑ PARTIAL</span>
+            :              <span className="sp-status-unpaid">✕ UNPAID</span>}
             <span className={`sp-fee-chevron ${open ? "open" : ""}`}>▾</span>
           </div>
         </div>
@@ -1039,7 +1055,7 @@ const FeeTermCard = ({ fee, user, onPaymentSuccess }) => {
             )}
 
             <div className="sp-fee-lines">
-              {lineItems.map(r => (
+              {lineItems.map((r) => (
                 <div key={r.label} className="sp-fee-line">
                   <span className="sp-fee-line-label">{r.label}</span>
                   <span className="sp-fee-line-val">GHS {fmt(r.value)}</span>
@@ -1061,28 +1077,14 @@ const FeeTermCard = ({ fee, user, onPaymentSuccess }) => {
 
             {isPaid ? (
               <div className="sp-pay-btn-paid">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                  <polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-                All fees paid — Thank you!
+                <CheckIcon /> All fees paid — Thank you!
               </div>
             ) : (
               <>
-                <button className="sp-pay-btn" onClick={() => setShowPayModal(true)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                    <line x1="1" y1="10" x2="23" y2="10"/>
-                  </svg>
-                  Pay Now — GHS {fmt(balance)}
+                <button className="sp-pay-btn" onClick={() => setShowModal(true)}>
+                  <CardIcon /> Pay Now — GHS {fmt(balance)}
                 </button>
-                <div className="sp-paystack-badge">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0110 0v4"/>
-                  </svg>
-                  Secured by Paystack · Mobile Money, Cards accepted
-                </div>
+                <PaystackBadge />
               </>
             )}
 
@@ -1092,74 +1094,44 @@ const FeeTermCard = ({ fee, user, onPaymentSuccess }) => {
       </div>
     </>
   );
-};
+});
 
-/* ─────────────────────────────────────────────
-   Fees Overview Banner
-───────────────────────────────────────────── */
-const FeesOverview = ({ fees }) => {
+
+const FeesOverview = memo(({ fees }) => {
   const totalBilled  = fees.reduce((s, f) => s + Number(f.total_amount || 0), 0);
   const totalPaid    = fees.reduce((s, f) => s + Number(f.paid || 0), 0);
   const totalBalance = fees.reduce((s, f) => s + Number(f.balance || 0), 0);
-  const fullyPaid    = fees.filter(f => Number(f.balance) <= 0).length;
+  const fullyPaid    = fees.filter((f) => Number(f.balance) <= 0).length;
   const pct          = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 0;
 
   return (
     <div className="sp-fee-overview">
       <div className="sp-fee-overview-label">Total outstanding balance</div>
       <div className="sp-fee-overview-total">GHS {fmt(totalBalance)}</div>
-      <div className="sp-fee-overview-sub">{pct}% of all fees paid · {fullyPaid}/{fees.length} terms cleared</div>
+      <div className="sp-fee-overview-sub">
+        {pct}% of all fees paid · {fullyPaid}/{fees.length} terms cleared
+      </div>
       <div style={{ marginTop:"14px", height:"6px", borderRadius:"99px", background:"rgba(255,255,255,.12)", overflow:"hidden" }}>
         <div style={{ height:"100%", borderRadius:"99px", width:`${pct}%`, background:"linear-gradient(90deg,#00c3f7,#00e676)", transition:"width .6s ease" }} />
       </div>
       <div className="sp-fee-overview-stats">
-        <div className="sp-fee-overview-stat">
-          <div className="sp-fee-overview-stat-val">GHS {fmt(totalBilled)}</div>
-          <div className="sp-fee-overview-stat-lbl">Total Billed</div>
-        </div>
-        <div className="sp-fee-overview-stat">
-          <div className="sp-fee-overview-stat-val" style={{ color:"#00e676" }}>GHS {fmt(totalPaid)}</div>
-          <div className="sp-fee-overview-stat-lbl">Total Paid</div>
-        </div>
-        <div className="sp-fee-overview-stat">
-          <div className="sp-fee-overview-stat-val" style={{ color: totalBalance > 0 ? "#ff6b6b" : "#00e676" }}>GHS {fmt(totalBalance)}</div>
-          <div className="sp-fee-overview-stat-lbl">Balance Due</div>
-        </div>
+        {[
+          { val: `GHS ${fmt(totalBilled)}`,  lbl: "Total Billed",  color: "#fff"    },
+          { val: `GHS ${fmt(totalPaid)}`,    lbl: "Total Paid",    color: "#00e676" },
+          { val: `GHS ${fmt(totalBalance)}`, lbl: "Balance Due",   color: totalBalance > 0 ? "#ff6b6b" : "#00e676" },
+        ].map(({ val, lbl, color }) => (
+          <div key={lbl} className="sp-fee-overview-stat">
+            <div className="sp-fee-overview-stat-val" style={{ color }}>{val}</div>
+            <div className="sp-fee-overview-stat-lbl">{lbl}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
-};
+});
 
-/* ─────────────────────────────────────────────
-   Grade badges
-───────────────────────────────────────────── */
-const GradeBadge = ({ grade }) => {
-  const c = GRADE_COLORS[grade];
-  return (
-    <span className="sp-badge" style={c ? { background: c.bg, color: c.color } : { background:"#f1f5f9", color:"#64748b" }}>
-      {grade ?? "—"}
-    </span>
-  );
-};
 
-const RemarkBadge = ({ grade, remark }) => {
-  const c = GRADE_COLORS[grade];
-  return (
-    <span className="sp-badge" style={c ? { background: c.bg, color: c.color, fontWeight:500, fontFamily:"'Outfit',sans-serif" } : { background:"#f1f5f9", color:"#94a3b8" }}>
-      {remark ?? "—"}
-    </span>
-  );
-};
-
-const KpiCard = ({ label, value, sub }) => (
-  <div className="sp-kpi">
-    <div className="sp-kpi-value">{value ?? "—"}</div>
-    {sub && <div className="sp-kpi-sub">{sub}</div>}
-    <div className="sp-kpi-label">{label}</div>
-  </div>
-);
-
-const SubjectTable = ({ report }) => (
+const SubjectTable = memo(({ report }) => (
   <div className="sp-card">
     <div className="sp-table-wrap">
       <table className="sp-table">
@@ -1183,7 +1155,11 @@ const SubjectTable = ({ report }) => (
               <td className="c sp-muted">{sub.ca     ?? "—"}</td>
               <td className="c sp-muted">{sub.exams  ?? "—"}</td>
               <td className="c sp-score">{sub.score}</td>
-              {report.show_position && <td className="c" style={{ fontWeight:"600", color:"#64748b" }}>{sub.subject_position ?? "—"}</td>}
+              {report.show_position && (
+                <td className="c" style={{ fontWeight:"600", color:"#64748b" }}>
+                  {sub.subject_position ?? "—"}
+                </td>
+              )}
               <td className="c"><GradeBadge grade={sub.grade} /></td>
               <td className="c"><RemarkBadge grade={sub.grade} remark={sub.remark} /></td>
             </tr>
@@ -1192,24 +1168,18 @@ const SubjectTable = ({ report }) => (
       </table>
     </div>
   </div>
-);
+));
 
-const SubjectLineChart = ({ subject, data, color }) => {
+
+const SubjectLineChart = memo(({ subject, data, color }) => {
   const W = 280, H = 90, PAD = 18;
-  const scores = data.map(d => d.score);
-  const min    = Math.max(0,   Math.min(...scores) - 12);
-  const max    = Math.min(100, Math.max(...scores) + 12);
-  const range  = max - min || 1;
-  const pts    = data.map((d, i) => ({
-    x: PAD + (i / Math.max(data.length - 1, 1)) * (W - PAD * 2),
-    y: PAD + (1 - (d.score - min) / range) * (H - PAD * 2),
-    score: d.score,
-    term:  d.term,
-  }));
+  const pts    = buildChartPoints(data.map((d) => d.score), { W, H, PAD });
   const pathD  = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const areaD  = pts.length > 0 ? `${pathD} L ${pts[pts.length-1].x} ${H-PAD} L ${pts[0].x} ${H-PAD} Z` : "";
-  const latest   = scores[scores.length - 1];
-  const previous = scores.length > 1 ? scores[scores.length - 2] : null;
+  const areaD  = pts.length > 0
+    ? `${pathD} L ${pts.at(-1).x} ${H - PAD} L ${pts[0].x} ${H - PAD} Z`
+    : "";
+  const latest   = data.at(-1)?.score;
+  const previous = data.length > 1 ? data.at(-2)?.score : null;
   const diff     = previous != null ? latest - previous : null;
 
   return (
@@ -1227,37 +1197,33 @@ const SubjectLineChart = ({ subject, data, color }) => {
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", height:76 }}>
         {areaD && <path d={areaD} fill={color} fillOpacity="0.07" />}
-        {[0, .5, 1].map(t => (
-          <line key={t} x1={PAD} y1={PAD+t*(H-PAD*2)} x2={W-PAD} y2={PAD+t*(H-PAD*2)} stroke="#f1f5f9" strokeWidth="1"/>
+        {[0, 0.5, 1].map((t) => (
+          <line key={t} x1={PAD} y1={PAD + t * (H - PAD * 2)} x2={W - PAD} y2={PAD + t * (H - PAD * 2)} stroke="#f1f5f9" strokeWidth="1" />
         ))}
-        {pts.length > 1 && <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>}
+        {pts.length > 1 && <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
         {pts.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="4.5" fill="white" stroke={color} strokeWidth="2.5"/>
-            <text x={p.x} y={H-2} textAnchor="middle" fontSize="9" fill="#94a3b8">
-              {TERMS.find(t => t.value === p.term)?.label.replace("Term ", "T")}
+            <circle cx={p.x} cy={p.y} r="4.5" fill="white" stroke={color} strokeWidth="2.5" />
+            <text x={p.x} y={H - 2} textAnchor="middle" fontSize="9" fill="#94a3b8">
+              {termShortLabel(data[i].term)}
             </text>
-            <text x={p.x} y={p.y-8} textAnchor="middle" fontSize="9" fill={color} fontWeight="700">{p.score}</text>
+            <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="9" fill={color} fontWeight="700">{p.score}</text>
           </g>
         ))}
       </svg>
     </div>
   );
-};
+});
 
-const OverallTrendChart = ({ termData }) => {
+
+const OverallTrendChart = memo(({ termData }) => {
   const W = 480, H = 110, PAD = 24;
-  const avgs  = termData.map(d => parseFloat(d.average) || 0);
-  const min   = Math.max(0,   Math.min(...avgs) - 15);
-  const max   = Math.min(100, Math.max(...avgs) + 15);
-  const range = max - min || 1;
-  const pts   = termData.map((d, i) => ({
-    x: PAD + (i / Math.max(termData.length - 1, 1)) * (W - PAD * 2),
-    y: PAD + (1 - ((parseFloat(d.average) || 0) - min) / range) * (H - PAD * 2),
-    ...d,
-  }));
+  const avgs = termData.map((d) => parseFloat(d.average) || 0);
+  const pts  = buildChartPoints(avgs, { W, H, PAD });
   const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const areaD = pts.length > 0 ? `${pathD} L ${pts[pts.length-1].x} ${H-PAD} L ${pts[0].x} ${H-PAD} Z` : "";
+  const areaD = pts.length > 0
+    ? `${pathD} L ${pts.at(-1).x} ${H - PAD} L ${pts[0].x} ${H - PAD} Z`
+    : "";
 
   return (
     <div className="sp-card">
@@ -1270,21 +1236,21 @@ const OverallTrendChart = ({ termData }) => {
               <stop offset="100%" stopColor="#2563eb" stopOpacity="0"/>
             </linearGradient>
           </defs>
-          {areaD && <path d={areaD} fill="url(#spGrad)"/>}
-          {[0, .5, 1].map(t => (
-            <line key={t} x1={PAD} y1={PAD+t*(H-PAD*2)} x2={W-PAD} y2={PAD+t*(H-PAD*2)} stroke="#f1f5f9" strokeWidth="1"/>
+          {areaD && <path d={areaD} fill="url(#spGrad)" />}
+          {[0, 0.5, 1].map((t) => (
+            <line key={t} x1={PAD} y1={PAD + t * (H - PAD * 2)} x2={W - PAD} y2={PAD + t * (H - PAD * 2)} stroke="#f1f5f9" strokeWidth="1" />
           ))}
-          {pts.length > 1 && <path d={pathD} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>}
+          {pts.length > 1 && <path d={pathD} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
           {pts.map((p, i) => (
             <g key={i}>
-              <circle cx={p.x} cy={p.y} r="6" fill="white" stroke="#2563eb" strokeWidth="3"/>
-              <text x={p.x} y={H-3} textAnchor="middle" fontSize="10" fill="#94a3b8">{p.label}</text>
-              <text x={p.x} y={p.y-10} textAnchor="middle" fontSize="11" fill="#2563eb" fontWeight="700">{p.average}</text>
+              <circle cx={p.x} cy={p.y} r="6" fill="white" stroke="#2563eb" strokeWidth="3" />
+              <text x={p.x} y={H - 3}    textAnchor="middle" fontSize="10" fill="#94a3b8">{termData[i].label}</text>
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fill="#2563eb" fontWeight="700">{termData[i].average}</text>
             </g>
           ))}
         </svg>
         <div className="sp-trend-cards">
-          {termData.map(d => (
+          {termData.map((d) => (
             <div key={d.term} className="sp-trend-card">
               <p style={{ fontSize:"10px", fontWeight:"700", color:"#94a3b8", textTransform:"uppercase", letterSpacing:".6px", margin:"0 0 4px" }}>{d.label}</p>
               <p style={{ fontFamily:"'DM Mono',monospace", fontWeight:"900", color:"#2563eb", fontSize:"22px", margin:"0 0 2px", lineHeight:1 }}>{d.average ?? "—"}</p>
@@ -1296,111 +1262,329 @@ const OverallTrendChart = ({ termData }) => {
       </div>
     </div>
   );
-};
+});
 
-const Empty = ({ icon, title, sub }) => (
-  <div className="sp-empty">
-    <div className="sp-empty-icon">{icon}</div>
-    <h3>{title}</h3>
-    {sub && <p>{sub}</p>}
-  </div>
-);
 
-const Loading = ({ text = "Loading…" }) => (
-  <div className="sp-loading">
-    <div className="sp-spinner"/>
-    {text}
-  </div>
-);
+// ─────────────────────────────────────────────
+// Tab content panels
+// ─────────────────────────────────────────────
 
-/* ─────────────────────────────────────────────
-   Main StudentPortal
-───────────────────────────────────────────── */
+const ResultsTab = memo(({ report, loading, selectedTerm }) => {
+  if (loading) return <Loading text="Loading results…" />;
+  if (!report) return <Empty icon="📭" title="No results found" sub="No data is available for this term yet." />;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+      <div className="sp-kpi-grid">
+        <KpiCard label="Total Marks"  value={report.total_score} />
+        <KpiCard label="Average"      value={report.average_score} />
+        <KpiCard
+          label="Position"
+          value={report.show_position ? report.position_formatted : "N/A"}
+          sub={report.show_position && report.out_of ? `out of ${report.out_of}` : null}
+        />
+        <KpiCard label="Overall Grade" value={report.overall_grade} />
+      </div>
+      <div className="sp-card">
+        <div className="sp-card-head">
+          <span className="sp-card-title">{findTerm(selectedTerm).label} — Subject Results</span>
+          <span style={{ fontSize:"12px", color:"#94a3b8" }}>{report.subjects?.length ?? 0} subjects</span>
+        </div>
+      </div>
+      <SubjectTable report={report} />
+    </div>
+  );
+});
+
+
+const ProgressTab = memo(({ allReports, loading, loaded }) => {
+  // Derive subject trends from all loaded reports
+  const subjectTrends = useMemo(() => {
+    const map = {};
+    TERMS.forEach(({ value: term }) => {
+      allReports[term]?.subjects?.forEach((sub) => {
+        if (!map[sub.subject]) map[sub.subject] = [];
+        map[sub.subject].push({ term, score: parseFloat(sub.score) || 0 });
+      });
+    });
+    return map;
+  }, [allReports]);
+
+  const termSummary = useMemo(() =>
+    TERMS
+      .filter(({ value }) => allReports[value])
+      .map(({ value, label }) => ({
+        term:     value,
+        label,
+        average:  allReports[value]?.average_score,
+        total:    allReports[value]?.total_score,
+        position: allReports[value]?.show_position ? allReports[value]?.position_formatted : null,
+      })),
+    [allReports]
+  );
+
+  const subjectNames = Object.keys(subjectTrends);
+
+  const mostImproved = useMemo(() => {
+    let best = null, bestDelta = -Infinity;
+    Object.entries(subjectTrends).forEach(([name, pts]) => {
+      if (pts.length < 2) return;
+      const delta = pts.at(-1).score - pts[0].score;
+      if (delta > bestDelta) { bestDelta = delta; best = { name, delta }; }
+    });
+    return best;
+  }, [subjectTrends]);
+
+  const needsAttention = useMemo(() => {
+    let worst = null, worstDelta = Infinity;
+    Object.entries(subjectTrends).forEach(([name, pts]) => {
+      if (pts.length < 2) return;
+      const delta = pts.at(-1).score - pts[0].score;
+      if (delta < worstDelta) { worstDelta = delta; worst = { name, delta }; }
+    });
+    return worst && worstDelta < 0 ? worst : null;
+  }, [subjectTrends]);
+
+  const availableTerms = TERMS.filter(({ value }) => allReports[value]);
+
+  if (loading) return <Loading text="Loading progress data…" />;
+  if (loaded && subjectNames.length === 0)
+    return <Empty icon="📈" title="No results yet" sub="Progress data will appear once results are entered." />;
+  if (!loaded) return null;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+      <div className="sp-hl-grid">
+        {mostImproved && (
+          <div className="sp-hl sp-hl-green">
+            <p className="sp-hl-label" style={{ color:"#16a34a" }}>Most Improved 🏆</p>
+            <p className="sp-hl-name">{mostImproved.name}</p>
+            <p className="sp-hl-delta" style={{ color:"#16a34a" }}>▲ +{mostImproved.delta.toFixed(1)} pts across terms</p>
+          </div>
+        )}
+        {needsAttention && (
+          <div className="sp-hl sp-hl-red">
+            <p className="sp-hl-label" style={{ color:"#dc2626" }}>Needs Attention ⚠️</p>
+            <p className="sp-hl-name">{needsAttention.name}</p>
+            <p className="sp-hl-delta" style={{ color:"#dc2626" }}>▼ {needsAttention.delta.toFixed(1)} pts across terms</p>
+          </div>
+        )}
+      </div>
+
+      {termSummary.length > 0 && <OverallTrendChart termData={termSummary} />}
+
+      <div className="sp-card">
+        <div className="sp-card-head">
+          <span className="sp-card-title">Subject Comparison — All Terms</span>
+          <span style={{ fontSize:"12px", color:"#94a3b8" }}>{subjectNames.length} subjects</span>
+        </div>
+        <div className="sp-table-wrap">
+          <table className="sp-table">
+            <thead>
+              <tr>
+                <th style={{ textAlign:"left", padding:"10px 14px" }}>Subject</th>
+                {availableTerms.map(({ value, label }) => (
+                  <th key={value} className="c">{label}</th>
+                ))}
+                <th className="c">Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subjectNames.map((name, si) => {
+                const color    = SUBJECT_PALETTE[si % SUBJECT_PALETTE.length];
+                const pts      = subjectTrends[name];
+                const scoreMap = Object.fromEntries(pts.map((p) => [p.term, p.score]));
+                const diff     = pts.length > 1 ? pts.at(-1).score - pts.at(-2).score : null;
+                return (
+                  <tr key={name}>
+                    <td>
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:"8px", fontWeight:"600", color:"#1e293b" }}>
+                        <span style={{ width:"8px", height:"8px", borderRadius:"50%", background:color, flexShrink:0 }} />
+                        {name}
+                      </span>
+                    </td>
+                    {availableTerms.map(({ value }) => (
+                      <td key={value} className="c">
+                        {scoreMap[value] != null
+                          ? <span style={{ fontWeight:"700", color:"#2563eb", fontFamily:"'DM Mono',monospace" }}>{scoreMap[value]}</span>
+                          : <span style={{ color:"#e2e8f0" }}>—</span>}
+                      </td>
+                    ))}
+                    <td className="c">
+                      {diff == null || Math.abs(diff) < 0.5
+                        ? <span style={{ color:"#94a3b8", fontSize:"12px" }}>→</span>
+                        : diff > 0
+                        ? <span style={{ color:"#16a34a", fontSize:"12px", fontWeight:"600" }}>▲ +{diff.toFixed(1)}</span>
+                        : <span style={{ color:"#dc2626", fontSize:"12px", fontWeight:"600" }}>▼ {diff.toFixed(1)}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <p style={{ fontWeight:"700", color:"#1e293b", fontSize:"13.5px", marginBottom:"12px" }}>Subject Trends</p>
+        <div className="sp-chart-grid">
+          {subjectNames.map((name, i) => (
+            <SubjectLineChart
+              key={name}
+              subject={name}
+              data={subjectTrends[name]}
+              color={SUBJECT_PALETTE[i % SUBJECT_PALETTE.length]}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+
+const ReportCardTab = memo(({ report, loading, selectedTerm, onDownload }) => {
+  if (loading) return <Loading text="Loading report card…" />;
+  if (!report) return <Empty icon="📄" title="No report card found" sub="No data available for this term." />;
+
+  const attendancePct = report.attendance_percent ?? 0;
+  const attendanceColor =
+    attendancePct >= 80 ? "#16a34a" :
+    attendancePct >= 60 ? "#d97706" : "#dc2626";
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+      <div className="sp-kpi-grid">
+        <KpiCard label="Total Marks"  value={report.total_score} />
+        <KpiCard label="Average"      value={report.average_score} />
+        <KpiCard
+          label="Position"
+          value={report.show_position ? report.position_formatted : "N/A"}
+          sub={report.show_position && report.out_of ? `out of ${report.out_of}` : null}
+        />
+        <KpiCard label="Overall Grade" value={report.overall_grade} />
+      </div>
+
+      {(report.attendance_total ?? 0) > 0 && (
+        <div className="sp-card">
+          <div className="sp-card-head"><span className="sp-card-title">Attendance</span></div>
+          <div style={{ padding:"14px 18px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:"13.5px", marginBottom:"6px" }}>
+              <span style={{ color:"#64748b" }}>Days Present</span>
+              <span style={{ fontWeight:"700", color:"#1e293b", fontFamily:"'DM Mono',monospace" }}>
+                {report.attendance} / {report.attendance_total}
+              </span>
+            </div>
+            <div className="sp-progress-bar">
+              <div className="sp-progress-fill" style={{ width:`${attendancePct}%`, background: attendanceColor }} />
+            </div>
+            <p style={{ fontSize:"11.5px", color:"#94a3b8", textAlign:"right", marginTop:"5px" }}>
+              {attendancePct}% attendance
+            </p>
+          </div>
+        </div>
+      )}
+
+      {(report.conduct || report.interest || report.teacher_remark) && (
+        <div className="sp-card">
+          <div className="sp-card-head"><span className="sp-card-title">Teacher's Remarks</span></div>
+          <div style={{ padding:"14px 18px" }}>
+            {report.conduct && (
+              <div className="sp-remark-row">
+                <span style={{ color:"#64748b", fontSize:"13.5px" }}>Conduct</span>
+                <span style={{ fontWeight:"600", color:"#2563eb", fontSize:"13.5px" }}>{report.conduct}</span>
+              </div>
+            )}
+            {report.interest && (
+              <div className="sp-remark-row">
+                <span style={{ color:"#64748b", fontSize:"13.5px" }}>Interest</span>
+                <span style={{ fontWeight:"600", color:"#2563eb", fontSize:"13.5px" }}>{report.interest}</span>
+              </div>
+            )}
+            {report.teacher_remark && (
+              <div className="sp-remark-quote">"{report.teacher_remark}"</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="sp-card">
+        <div className="sp-card-head"><span className="sp-card-title">Subject Breakdown</span></div>
+      </div>
+      <SubjectTable report={report} />
+    </div>
+  );
+});
+
+
+const FeesTab = memo(({ fees, loading, error, user, onPaymentSuccess }) => {
+  if (loading) return <Loading text="Loading fee records…" />;
+  if (error)   return <Empty icon="⚠️" title="Failed to load fees" sub={error} />;
+  if (!fees.length) return (
+    <Empty icon="💳" title="No fee records found" sub="Your fee records will appear here once assigned by the school." />
+  );
+
+  return (
+    <>
+      <FeesOverview fees={fees} />
+      {fees.map((fee) => (
+        <FeeTermCard key={fee.id} fee={fee} user={user} onPaymentSuccess={onPaymentSuccess} />
+      ))}
+    </>
+  );
+});
+
+
+// ─────────────────────────────────────────────
+// Main StudentPortal
+// ─────────────────────────────────────────────
+
 const StudentPortal = () => {
+  // Inject styles once
   useEffect(() => {
     if (document.getElementById("sp-styles")) return;
-    const el = document.createElement("style");
-    el.id = "sp-styles";
+    const el      = document.createElement("style");
+    el.id         = "sp-styles";
     el.textContent = PORTAL_STYLES;
     document.head.appendChild(el);
   }, []);
 
   // Preload Paystack SDK silently on mount
+  useEffect(() => { loadPaystack().catch(() => {}); }, []);
+
+  const user = useMemo(() => getUser(), []);
+
+  const [tab, setTab]                       = useState("Results");
+  const [selectedTerm, setSelectedTerm]     = useState("term1");
+  const [showPwModal, setShowPwModal]       = useState(false);
+  const [successPayment, setSuccessPayment] = useState(null);
+  const [globalError, setGlobalError]       = useState("");
+
+  // Tab-scoped data hooks
+  const isResultsTab    = tab === "Results";
+  const isReportCardTab = tab === "Report Card";
+  const isProgressTab   = tab === "Progress";
+  const isFeesTab       = tab === "Fees";
+
+  const { report: resultsReport,    loading: loadingResults,    error: resultsError    } = useReport(user.student_id, selectedTerm, isResultsTab);
+  const { report: reportCardReport, loading: loadingReportCard, error: reportCardError } = useReport(user.student_id, selectedTerm, isReportCardTab);
+  const { allReports, loading: loadingProgress, loaded: progressLoaded }                 = useAllReports(user.student_id, isProgressTab);
+  const { fees, loading: loadingFees, error: feesError, refetch: refetchFees }           = useFees(user.student_id, isFeesTab);
+
+  // Propagate tab-level errors into the global error banner
   useEffect(() => {
-    loadPaystack().catch(() => {});
-  }, []);
+    setGlobalError(resultsError || reportCardError || feesError || "");
+  }, [resultsError, reportCardError, feesError]);
 
-  const user = getUser();
+  // Clear error on tab switch
+  useEffect(() => { setGlobalError(""); }, [tab]);
 
-  const [tab, setTab]                         = useState("Results");
-  const [selectedTerm, setSelectedTerm]       = useState("term1");
-  const [report, setReport]                   = useState(null);
-  const [loading, setLoading]                 = useState(false);
-  const [allReports, setAllReports]           = useState({});
-  const [loadingProgress, setLoadingProgress] = useState(false);
-  const [progressLoaded, setProgressLoaded]   = useState(false);
-  const [fees, setFees]                       = useState([]);
-  const [loadingFees, setLoadingFees]         = useState(false);
-  const [error, setError]                     = useState("");
-  const [showPwModal, setShowPwModal]         = useState(false);
-  const [successPayment, setSuccessPayment]   = useState(null);
-
-  const fetchReport = useCallback(async (term) => {
-    setLoading(true); setError(""); setReport(null);
+  const handleDownloadPdf = useCallback(async () => {
     try {
-      const r = await API.get(`/report/student/${user.student_id}/?term=${term}`);
-      setReport(r.data);
-    } catch {
-      setError("No report found for this term.");
-    } finally {
-      setLoading(false);
-    }
-  }, [user.student_id]);
-
-  const fetchAllReports = useCallback(async () => {
-    if (progressLoaded) return;
-    setLoadingProgress(true); setError("");
-    const results = {};
-    await Promise.all(TERMS.map(async ({ value }) => {
-      try {
-        const r = await API.get(`/report/student/${user.student_id}/?term=${value}`);
-        results[value] = r.data;
-      } catch {}
-    }));
-    setAllReports(results);
-    setProgressLoaded(true);
-    setLoadingProgress(false);
-  }, [user.student_id, progressLoaded]);
-
-  const fetchFees = useCallback(async () => {
-    setLoadingFees(true); setError("");
-    try {
-      const r = await API.get(`/fees/?student=${user.student_id}`);
-      setFees(r.data.results ?? r.data);
-    } catch {
-      setError("Failed to load fees.");
-    } finally {
-      setLoadingFees(false);
-    }
-  }, [user.student_id]);
-
-  useEffect(() => {
-    if (tab === "Results" || tab === "Report Card") fetchReport(selectedTerm);
-  }, [tab, selectedTerm, fetchReport]);
-
-  useEffect(() => {
-    if (tab === "Progress") fetchAllReports();
-  }, [tab, fetchAllReports]);
-
-  useEffect(() => {
-    if (tab === "Fees") fetchFees();
-  }, [tab, fetchFees]);
-
-  useEffect(() => { setError(""); }, [tab]);
-
-  const downloadReport = async () => {
-    try {
-      const r = await API.get(`/report/student/${user.student_id}/pdf/?term=${selectedTerm}`, { responseType:"blob" });
+      const r = await API.get(
+        `/report/student/${user.student_id}/pdf/?term=${selectedTerm}`,
+        { responseType: "blob" }
+      );
       const link = document.createElement("a");
       link.href  = window.URL.createObjectURL(new Blob([r.data]));
       link.setAttribute("download", `report_${selectedTerm}.pdf`);
@@ -1408,60 +1592,16 @@ const StudentPortal = () => {
       link.click();
       link.remove();
     } catch {
-      setError("Failed to download report.");
+      setGlobalError("Failed to download report.");
     }
-  };
+  }, [user.student_id, selectedTerm]);
 
-  const handlePaymentSuccess = (amount, reference) => {
+  const handlePaymentSuccess = useCallback((amount, reference) => {
     setSuccessPayment({ amount, reference });
-    setTimeout(fetchFees, 3000);
-  };
+    setTimeout(refetchFees, 3000);
+  }, [refetchFees]);
 
-  /* ── Progress derived data ── */
-  const subjectTrends = (() => {
-    const map = {};
-    TERMS.forEach(({ value: term }) => {
-      const rep = allReports[term];
-      if (!rep?.subjects) return;
-      rep.subjects.forEach(sub => {
-        if (!map[sub.subject]) map[sub.subject] = [];
-        map[sub.subject].push({ term, score: parseFloat(sub.score) || 0 });
-      });
-    });
-    return map;
-  })();
-
-  const termSummary = TERMS
-    .filter(({ value }) => allReports[value])
-    .map(({ value, label }) => ({
-      term:     value,
-      label,
-      average:  allReports[value]?.average_score,
-      total:    allReports[value]?.total_score,
-      position: allReports[value]?.show_position ? allReports[value]?.position_formatted : null,
-    }));
-
-  const subjectNames = Object.keys(subjectTrends);
-
-  const mostImproved = (() => {
-    let best = null, bestDelta = -Infinity;
-    Object.entries(subjectTrends).forEach(([name, pts]) => {
-      if (pts.length < 2) return;
-      const delta = pts[pts.length-1].score - pts[0].score;
-      if (delta > bestDelta) { bestDelta = delta; best = { name, delta }; }
-    });
-    return best;
-  })();
-
-  const needsAttention = (() => {
-    let worst = null, worstDelta = Infinity;
-    Object.entries(subjectTrends).forEach(([name, pts]) => {
-      if (pts.length < 2) return;
-      const delta = pts[pts.length-1].score - pts[0].score;
-      if (delta < worstDelta) { worstDelta = delta; worst = { name, delta }; }
-    });
-    return worst && worstDelta < 0 ? worst : null;
-  })();
+  const showTermBar = TABS_WITH_TERM_BAR.has(tab);
 
   return (
     <div className="sp-root">
@@ -1476,23 +1616,29 @@ const StudentPortal = () => {
 
       {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
 
-      {/* Header */}
       <header className="sp-header">
         <div className="sp-header-inner">
-          {user.photo
-            ? <img src={user.photo} alt="avatar" className="sp-avatar"
-                onError={e => { e.target.style.display = "none"; }}
-              />
-            : <div className="sp-avatar-fallback">{user.full_name?.[0] ?? "S"}</div>
-          }
+          {user.photo ? (
+            <img
+              src={user.photo}
+              alt="avatar"
+              className="sp-avatar"
+              onError={(e) => { e.target.style.display = "none"; }}
+            />
+          ) : (
+            <div className="sp-avatar-fallback">{user.full_name?.[0] ?? "S"}</div>
+          )}
           <div>
             <div className="sp-header-name">{user.full_name}</div>
             <div className="sp-header-sub">{user.admission_number} · {user.class}</div>
           </div>
           <nav className="sp-nav" style={{ marginLeft:"auto", marginRight:"12px" }}>
             {TABS.map(({ key, icon, label }) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`sp-nav-btn ${tab === key ? "sp-nav-btn-active" : ""}`}>
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`sp-nav-btn ${tab === key ? "sp-nav-btn-active" : ""}`}
+              >
                 <span>{icon}</span>
                 <span>{label}</span>
               </button>
@@ -1506,8 +1652,11 @@ const StudentPortal = () => {
         <div className="sp-mobile-nav">
           <div className="sp-mobile-nav-inner">
             {TABS.map(({ key, icon, label }) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`sp-mobile-btn ${tab === key ? "sp-mobile-btn-active" : ""}`}>
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`sp-mobile-btn ${tab === key ? "sp-mobile-btn-active" : ""}`}
+              >
                 <span style={{ fontSize:"18px" }}>{icon}</span>
                 {label}
               </button>
@@ -1518,257 +1667,39 @@ const StudentPortal = () => {
 
       <div className="sp-body">
 
-        {tab !== "Progress" && tab !== "Announcements" && tab !== "Fees" && (
+        {showTermBar && (
           <div className="sp-term-bar">
             <div>
               <label className="sp-field-label">Term</label>
-              <select className="sp-select" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
-                {TERMS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              <select className="sp-select" value={selectedTerm} onChange={(e) => setSelectedTerm(e.target.value)}>
+                {TERMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
-            {tab === "Report Card" && report && (
-              <button className="sp-btn-pdf" onClick={downloadReport}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Download PDF
+            {isReportCardTab && reportCardReport && (
+              <button className="sp-btn-pdf" onClick={handleDownloadPdf}>
+                <DownloadIcon /> Download PDF
               </button>
             )}
           </div>
         )}
 
-        {error && (
+        {globalError && (
           <div className="sp-alert">
-            <span>⚠ {error}</span>
-            <button onClick={() => setError("")} style={{ background:"none", border:"none", cursor:"pointer", color:"inherit", fontSize:"18px", opacity:.6, padding:"0 0 0 12px" }}>×</button>
+            <span>⚠ {globalError}</span>
+            <button
+              onClick={() => setGlobalError("")}
+              style={{ background:"none", border:"none", cursor:"pointer", color:"inherit", fontSize:"18px", opacity:.6, padding:"0 0 0 12px" }}
+            >
+              ×
+            </button>
           </div>
         )}
 
-        {/* ══ Results ══ */}
-        {tab === "Results" && (
-          <>
-            {loading && <Loading text="Loading results…"/>}
-            {!loading && !report && <Empty icon="📭" title="No results found" sub="No data is available for this term yet."/>}
-            {!loading && report && (
-              <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
-                <div className="sp-kpi-grid">
-                  <KpiCard label="Total Marks"  value={report.total_score} />
-                  <KpiCard label="Average"       value={report.average_score} />
-                  <KpiCard label="Position"
-                    value={report.show_position ? report.position_formatted : "N/A"}
-                    sub={report.show_position && report.out_of ? `out of ${report.out_of}` : null}
-                  />
-                  <KpiCard label="Overall Grade" value={report.overall_grade} />
-                </div>
-                <div className="sp-card">
-                  <div className="sp-card-head">
-                    <span className="sp-card-title">{TERMS.find(t => t.value === selectedTerm)?.label} — Subject Results</span>
-                    <span style={{ fontSize:"12px", color:"#94a3b8" }}>{report.subjects?.length ?? 0} subjects</span>
-                  </div>
-                </div>
-                <SubjectTable report={report}/>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ══ Progress ══ */}
-        {tab === "Progress" && (
-          <>
-            {loadingProgress && <Loading text="Loading progress data…"/>}
-            {!loadingProgress && progressLoaded && subjectNames.length === 0 && (
-              <Empty icon="📈" title="No results yet" sub="Progress data will appear once results are entered."/>
-            )}
-            {!loadingProgress && progressLoaded && subjectNames.length > 0 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
-                <div className="sp-hl-grid">
-                  {mostImproved && (
-                    <div className="sp-hl sp-hl-green">
-                      <p className="sp-hl-label" style={{ color:"#16a34a" }}>Most Improved 🏆</p>
-                      <p className="sp-hl-name">{mostImproved.name}</p>
-                      <p className="sp-hl-delta" style={{ color:"#16a34a" }}>▲ +{mostImproved.delta.toFixed(1)} pts across terms</p>
-                    </div>
-                  )}
-                  {needsAttention && (
-                    <div className="sp-hl sp-hl-red">
-                      <p className="sp-hl-label" style={{ color:"#dc2626" }}>Needs Attention ⚠️</p>
-                      <p className="sp-hl-name">{needsAttention.name}</p>
-                      <p className="sp-hl-delta" style={{ color:"#dc2626" }}>▼ {needsAttention.delta.toFixed(1)} pts across terms</p>
-                    </div>
-                  )}
-                </div>
-                {termSummary.length > 0 && <OverallTrendChart termData={termSummary}/>}
-                <div className="sp-card">
-                  <div className="sp-card-head">
-                    <span className="sp-card-title">Subject Comparison — All Terms</span>
-                    <span style={{ fontSize:"12px", color:"#94a3b8" }}>{subjectNames.length} subjects</span>
-                  </div>
-                  <div className="sp-table-wrap">
-                    <table className="sp-table">
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign:"left", padding:"10px 14px" }}>Subject</th>
-                          {TERMS.filter(({ value }) => allReports[value]).map(({ value, label }) => (
-                            <th key={value} className="c">{label}</th>
-                          ))}
-                          <th className="c">Trend</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {subjectNames.map((name, si) => {
-                          const color    = SUBJECT_PALETTE[si % SUBJECT_PALETTE.length];
-                          const pts      = subjectTrends[name];
-                          const scoreMap = Object.fromEntries(pts.map(p => [p.term, p.score]));
-                          const diff     = pts.length > 1 ? pts[pts.length-1].score - pts[pts.length-2].score : null;
-                          return (
-                            <tr key={name}>
-                              <td>
-                                <span style={{ display:"inline-flex", alignItems:"center", gap:"8px", fontWeight:"600", color:"#1e293b" }}>
-                                  <span style={{ width:"8px", height:"8px", borderRadius:"50%", background:color, flexShrink:0 }}/>
-                                  {name}
-                                </span>
-                              </td>
-                              {TERMS.filter(({ value }) => allReports[value]).map(({ value }) => {
-                                const score = scoreMap[value];
-                                return (
-                                  <td key={value} className="c">
-                                    {score != null
-                                      ? <span style={{ fontWeight:"700", color:"#2563eb", fontFamily:"'DM Mono',monospace" }}>{score}</span>
-                                      : <span style={{ color:"#e2e8f0" }}>—</span>}
-                                  </td>
-                                );
-                              })}
-                              <td className="c">
-                                {diff == null || Math.abs(diff) < 0.5
-                                  ? <span style={{ color:"#94a3b8", fontSize:"12px" }}>→</span>
-                                  : diff > 0
-                                  ? <span style={{ color:"#16a34a", fontSize:"12px", fontWeight:"600" }}>▲ +{diff.toFixed(1)}</span>
-                                  : <span style={{ color:"#dc2626", fontSize:"12px", fontWeight:"600" }}>▼ {diff.toFixed(1)}</span>
-                                }
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div>
-                  <p style={{ fontWeight:"700", color:"#1e293b", fontSize:"13.5px", marginBottom:"12px" }}>Subject Trends</p>
-                  <div className="sp-chart-grid">
-                    {subjectNames.map((name, i) => (
-                      <SubjectLineChart
-                        key={name}
-                        subject={name}
-                        data={subjectTrends[name]}
-                        color={SUBJECT_PALETTE[i % SUBJECT_PALETTE.length]}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ══ Report Card ══ */}
-        {tab === "Report Card" && (
-          <>
-            {loading && <Loading text="Loading report card…"/>}
-            {!loading && !report && <Empty icon="📄" title="No report card found" sub="No data available for this term."/>}
-            {!loading && report && (
-              <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
-                <div className="sp-kpi-grid">
-                  <KpiCard label="Total Marks"  value={report.total_score} />
-                  <KpiCard label="Average"       value={report.average_score} />
-                  <KpiCard label="Position"
-                    value={report.show_position ? report.position_formatted : "N/A"}
-                    sub={report.show_position && report.out_of ? `out of ${report.out_of}` : null}
-                  />
-                  <KpiCard label="Overall Grade" value={report.overall_grade} />
-                </div>
-                {(report.attendance_total ?? 0) > 0 && (
-                  <div className="sp-card">
-                    <div className="sp-card-head"><span className="sp-card-title">Attendance</span></div>
-                    <div style={{ padding:"14px 18px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:"13.5px", marginBottom:"6px" }}>
-                        <span style={{ color:"#64748b" }}>Days Present</span>
-                        <span style={{ fontWeight:"700", color:"#1e293b", fontFamily:"'DM Mono',monospace" }}>
-                          {report.attendance} / {report.attendance_total}
-                        </span>
-                      </div>
-                      <div className="sp-progress-bar">
-                        <div className="sp-progress-fill" style={{
-                          width: `${report.attendance_percent ?? 0}%`,
-                          background: (report.attendance_percent ?? 0) >= 80 ? "#16a34a"
-                            : (report.attendance_percent ?? 0) >= 60 ? "#d97706"
-                            : "#dc2626",
-                        }}/>
-                      </div>
-                      <p style={{ fontSize:"11.5px", color:"#94a3b8", textAlign:"right", marginTop:"5px" }}>
-                        {report.attendance_percent}% attendance
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {(report.conduct || report.interest || report.teacher_remark) && (
-                  <div className="sp-card">
-                    <div className="sp-card-head"><span className="sp-card-title">Teacher's Remarks</span></div>
-                    <div style={{ padding:"14px 18px" }}>
-                      {report.conduct && (
-                        <div className="sp-remark-row">
-                          <span style={{ color:"#64748b", fontSize:"13.5px" }}>Conduct</span>
-                          <span style={{ fontWeight:"600", color:"#2563eb", fontSize:"13.5px" }}>{report.conduct}</span>
-                        </div>
-                      )}
-                      {report.interest && (
-                        <div className="sp-remark-row">
-                          <span style={{ color:"#64748b", fontSize:"13.5px" }}>Interest</span>
-                          <span style={{ fontWeight:"600", color:"#2563eb", fontSize:"13.5px" }}>{report.interest}</span>
-                        </div>
-                      )}
-                      {report.teacher_remark && (
-                        <div className="sp-remark-quote">"{report.teacher_remark}"</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="sp-card">
-                  <div className="sp-card-head"><span className="sp-card-title">Subject Breakdown</span></div>
-                </div>
-                <SubjectTable report={report}/>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ══ Fees ══ */}
-        {tab === "Fees" && (
-          <>
-            {loadingFees && <Loading text="Loading fee records…"/>}
-            {!loadingFees && fees.length === 0 && (
-              <Empty icon="💳" title="No fee records found" sub="Your fee records will appear here once assigned by the school."/>
-            )}
-            {!loadingFees && fees.length > 0 && (
-              <>
-                <FeesOverview fees={fees} />
-                {fees.map(fee => (
-                  <FeeTermCard
-                    key={fee.id}
-                    fee={fee}
-                    user={user}
-                    onPaymentSuccess={handlePaymentSuccess}
-                  />
-                ))}
-              </>
-            )}
-          </>
-        )}
-
-        {/* ══ Announcements ══ */}
-        {tab === "Announcements" && <AnnouncementsFeed audience="students"/>}
+        {tab === "Results"       && <ResultsTab    report={resultsReport}    loading={loadingResults}    selectedTerm={selectedTerm} />}
+        {tab === "Progress"      && <ProgressTab   allReports={allReports}   loading={loadingProgress}  loaded={progressLoaded} />}
+        {tab === "Report Card"   && <ReportCardTab report={reportCardReport} loading={loadingReportCard} selectedTerm={selectedTerm} onDownload={handleDownloadPdf} />}
+        {tab === "Fees"          && <FeesTab       fees={fees}               loading={loadingFees}      error={feesError} user={user} onPaymentSuccess={handlePaymentSuccess} />}
+        {tab === "Announcements" && <AnnouncementsFeed audience="students" />}
 
       </div>
     </div>
