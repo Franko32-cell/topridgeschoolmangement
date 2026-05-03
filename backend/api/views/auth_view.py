@@ -93,7 +93,7 @@ def _resolve_username(identifier: str) -> str:
     if User.objects.filter(username=identifier).exists():
         return identifier
 
-    # Try admission number (supports legacy LSA prefix too, for safe migration)
+    # Try admission number (TRS- prefix)
     try:
         student = Student.objects.get(admission_number__iexact=identifier)
         return student.user.username
