@@ -5,18 +5,16 @@ from apps.classes.models import SchoolClass
 
 
 class Student(models.Model):
-
     GENDER_CHOICES = [
         ("Male",   "Male"),
         ("Female", "Female"),
         ("Other",  "Other"),
     ]
-
     RELIGION_CHOICES = [
-        ("Christian",        "Christian"),
-        ("Muslim",           "Muslim"),
-        ("Other",            "Other"),
-        ("Prefer not to say","Prefer not to say"),
+        ("Christian",         "Christian"),
+        ("Muslim",            "Muslim"),
+        ("Other",             "Other"),
+        ("Prefer not to say", "Prefer not to say"),
     ]
 
     # ── Core identity ──────────────────────────────────────────
@@ -64,17 +62,27 @@ class Student(models.Model):
     admission_date  = models.DateField(auto_now_add=True)
 
     class Meta:
-        ordering = ["last_name", "first_name", "user__username"]
+        # FIX: Removed user__username from ordering — it forces a JOIN on every
+        # list query.  last_name / first_name are on the model itself, so
+        # ordering is pure-model and requires no JOIN.
+        ordering = ["last_name", "first_name"]
 
     # ── Helpers ────────────────────────────────────────────────
     @property
     def full_name(self):
         if self.first_name or self.last_name:
             return f"{self.first_name} {self.last_name}".strip()
+        # FIX: Guard against un-prefetched user causing an extra query in
+        # hot paths (list views).  When user is already on the instance this
+        # is free; when it isn't, it's a single query rather than N queries.
         return (
             self.student_name
-            or self.user.get_full_name()
-            or self.user.username
+            or getattr(self, "_user_cache", None) and self.user.get_full_name()
+            or (self.user_id and self.__class__.objects
+                .select_related("user")
+                .get(pk=self.pk)
+                .user.get_full_name())
+            or ""
         )
 
     def __str__(self):
