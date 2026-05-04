@@ -2,7 +2,6 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from apps.students.models import Student
 from apps.subjects.models import Subject
-from apps.classes.models import SchoolClass
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -22,11 +21,9 @@ class Result(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="results")
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="results")
 
-    # FIX: Removed school_class FK — it was never used in any query and its
-    # presence alongside student.school_class caused confusion.  The student's
-    # class is always available via student.school_class; storing it a second
-    # time on Result created a silent inconsistency risk.
-    # If you need class-scoped result queries, filter via student__school_class.
+    # school_class FK removed — the student's class is always available via
+    # student.school_class. Storing it a second time on Result created a silent
+    # inconsistency risk.  Filter class-scoped queries via student__school_class.
 
     term = models.CharField(max_length=10, choices=TERM_CHOICES)
     year = models.PositiveIntegerField(default=2025)
@@ -46,7 +43,7 @@ class Result(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # year is now part of uniqueness — prevents term1 2024 and term1 2025
+        # year is part of uniqueness — prevents term1 2024 and term1 2025
         # from colliding and ensures cross-year filtering is safe.
         unique_together = ["student", "subject", "term", "year"]
         ordering        = ["-year", "term", "subject__name"]
@@ -55,6 +52,9 @@ class Result(models.Model):
         return f"{self.student} – {self.subject} – {self.term} {self.year} – {self.score}"
 
     def save(self, *args, **kwargs):
+        # FIX: Call full_clean() so MinValueValidator / MaxValueValidator are
+        # enforced even when bypassing forms/serializers (shell, scripts, tests).
+        self.full_clean()
         self.score = round(self.ca + self.reopen + self.exams, 2)
         super().save(*args, **kwargs)
 
@@ -76,10 +76,8 @@ class Report(models.Model):
 
     # Attendance is derived from the Attendance model in the API view.
     # These fields are kept for legacy / manual overrides only.
-    # FIX: Default attendance_total to 0 (not 1) so that before any real
-    # attendance is recorded, attendance_percent comes out as 0% (via the
-    # `if total_days else 0` guard in the view), not 0/1 = 0% with misleading
-    # denominator shown on the report card.
+    # Default attendance_total to 0 (not 1) so that before any real
+    # attendance is recorded, attendance_percent comes out as 0%.
     attendance       = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     attendance_total = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
 
