@@ -176,7 +176,6 @@ const ChangePasswordModal = ({ onClose }) => {
     }
   };
 
-  // Close on backdrop click
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -683,10 +682,12 @@ const TeacherPortal = () => {
         <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {user.username?.[0]?.toUpperCase()}
+              {/* ✅ FIXED: use full_name initial, fall back to username */}
+              {(user.full_name?.[0] ?? user.username?.[0])?.toUpperCase()}
             </div>
             <div>
-              <p className="font-bold text-slate-800 text-sm leading-tight">{user.username}</p>
+              {/* ✅ FIXED: show full_name, fall back to username */}
+              <p className="font-bold text-slate-800 text-sm leading-tight">{user.full_name || user.username}</p>
               <p className="text-slate-400 text-xs">
                 {user.teacher_id}{user.subject ? ` · ${user.subject}` : ""}
               </p>
@@ -1110,10 +1111,10 @@ const TeacherPortal = () => {
                   <div className="bg-gradient-to-br from-blue-700 to-blue-900 text-white px-6 py-5 flex justify-between items-start gap-4">
                     <div className="space-y-1">
                       <p className="font-black text-lg leading-tight">
-                        {report.school_name || "LEA INTTATARS ARADEMYADEMYADEMY"}
+                        {report.school_name || "LEA INTERNATIONAL ACADEMY"}
                       </p>
                       <p className="text-blue-300 text-xs">
-                        {level === "nursery_kg" ? "GLOBAL LEADERS" : "WHlel=LEA ERn ARE B_Rk"}g" ? "GLOBAL LEADERS" : "WHlel=LEA ERn ARE B_Rk"}g" ? "GLOBAL LEADERS" : "WHERE LEADERS ARE BORN"}
+                        {level === "nursery_kg" ? "GLOBAL LEADERS" : "WHERE LEADERS ARE BORN"}
                       </p>
                       <div className="mt-3 space-y-0.5">
                         <p className="font-bold text-base">{report.student}</p>
