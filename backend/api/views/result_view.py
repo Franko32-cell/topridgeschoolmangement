@@ -1,4 +1,4 @@
-﻿from rest_framework import status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -20,15 +20,16 @@ from api.serializers.result_serializer import ResultSerializer
 # ---------------------------------------------------------------------------
 
 GRADE_THRESHOLDS_B79 = [
-    (90, "1",  "Excellent"),
-    (80, "2",  "Very Good"),
-    (70, "3",  "Good"),
-    (60, "4",  "High Average"),
-    (55, "5",  "Average"),
-    (50, "6",  "Low Average"),
-    (45, "7",  "Low"),
-    (40, "6",  "Lower"),
-    (0,  "9",  "Lowest"),
+    (90, "1", "Excellent"),
+    (80, "2", "Very Good"),
+    (70, "3", "Good"),
+    (60, "4", "High Average"),
+    (55, "5", "Average"),
+    (50, "6", "Low Average"),
+    (45, "7", "Low"),
+    # FIX: was "6" (duplicate) — corrected to "8" to match the 1–9 sequence
+    (40, "8", "Lower"),
+    (0,  "9", "Lowest"),
 ]
 
 GRADE_THRESHOLDS_B16 = [
@@ -145,7 +146,7 @@ class ResultViewSet(ModelViewSet):
         year         = params.get("year")
 
         if student:      qs = qs.filter(student_id=student)
-        if school_class: qs = qs.filter(student__school_class_id=school_class)  # ← fixed
+        if school_class: qs = qs.filter(student__school_class_id=school_class)
         if term:         qs = qs.filter(term=term)
         if subject:      qs = qs.filter(subject_id=subject)
         if year:         qs = qs.filter(year=year)
@@ -204,7 +205,10 @@ class ResultViewSet(ModelViewSet):
             except Exception as exc:
                 errors.append({"record": record, "error": str(exc)})
 
-        # Recompute positions per unique (subject, term, class, year) combo
+        # FIX: Collect unique (subject, term, class, year) combos first, then
+        # recompute positions once per combo instead of once per record.
+        # For a 30-student bulk save this reduces position queries from 30 → 1.
+        combos = set()
         for record in records:
             if "subject" not in record or "term" not in record:
                 continue
@@ -213,14 +217,17 @@ class ResultViewSet(ModelViewSet):
                     id=record["student"]
                 )
                 if student.school_class_id:
-                    recompute_subject_positions(
+                    combos.add((
                         record["subject"],
                         record["term"],
                         student.school_class_id,
                         int(record.get("year") or year),
-                    )
+                    ))
             except Exception:
                 pass
+
+        for subject_id, term, class_id, yr in combos:
+            recompute_subject_positions(subject_id, term, class_id, yr)
 
         response_status = (
             status.HTTP_400_BAD_REQUEST  if not saved and errors else
@@ -245,7 +252,6 @@ class ResultViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ← key fix: filter via student__school_class_id
         results = (
             Result.objects
             .filter(
@@ -362,6 +368,7 @@ class StudentReportView(APIView):
         average       = round(total_score / subject_count, 2) if subject_count else 0
 
         # Class ranking — via student__school_class
+        # FIX: Removed redundant Python sort; .order_by("-total") already sorts.
         class_totals = (
             Result.objects
             .filter(student__school_class=student.school_class, term=term, year=year)
@@ -370,7 +377,6 @@ class StudentReportView(APIView):
             .order_by("-total")
         )
         ranked = list(class_totals)
-        ranked.sort(key=lambda x: x["total"] or 0, reverse=True)
         _assign_ranks(ranked, key="total")
 
         position = next(
@@ -394,7 +400,6 @@ class StudentReportView(APIView):
 
         report = Report.objects.filter(student=student, term=term, year=year).first()
 
-        # Dates
         vacation_date   = ""
         resumption_date = ""
         if report:
