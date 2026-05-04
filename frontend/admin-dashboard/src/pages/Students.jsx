@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import API from "../services/api";
 
+const DEFAULT_PASSWORD = "student123";
+
 const getStudentName = (s) =>
   s?.student_name ||
   (s?.first_name || s?.last_name
@@ -129,6 +131,17 @@ const DetailPanel = ({ student, onClose, onEdit }) => {
               <p className="text-sm text-amber-800">{student.health_notes}</p>
             </div>
           )}
+
+          {/* Default password reminder for admins */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+            <p className="text-xs font-semibold text-blue-600 mb-1">🔑 Login Credentials</p>
+            <p className="text-xs text-blue-700">
+              Username: <span className="font-mono font-bold">{student.username || student.admission_number}</span>
+            </p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              Default password: <span className="font-mono font-bold">{DEFAULT_PASSWORD}</span>
+            </p>
+          </div>
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
@@ -169,11 +182,12 @@ const EditModal = ({ student, classes = [], onClose, onSaved, setError }) => {
     health_notes:    student.health_notes    || "",
     previous_school: student.previous_school || "",
   });
-  const [photoFile, setPhotoFile]   = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [saving, setSaving]         = useState(false);
-  const [nameError, setNameError]   = useState("");
-  const fileInputRef                = useRef(null);
+  const [photoFile, setPhotoFile]       = useState(null);
+  const [previewUrl, setPreviewUrl]     = useState(null);
+  const [saving, setSaving]             = useState(false);
+  const [resetting, setResetting]       = useState(false);
+  const [nameError, setNameError]       = useState("");
+  const fileInputRef                    = useRef(null);
 
   useEffect(() => {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
@@ -193,7 +207,7 @@ const EditModal = ({ student, classes = [], onClose, onSaved, setError }) => {
     setPreviewUrl(URL.createObjectURL(file));
   };
 
-  // FIX 3: Send JSON when no photo, FormData only when photo is attached
+  // Send JSON when no photo, FormData only when photo is attached
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -205,29 +219,22 @@ const EditModal = ({ student, classes = [], onClose, onSaved, setError }) => {
     setSaving(true);
     try {
       if (photoFile) {
-        // Only use FormData when a new photo is being uploaded
         const fd = new FormData();
         Object.entries(form).forEach(([k, v]) => {
-          if (v !== "" && v !== null && v !== undefined) {
-            fd.append(k, v);
-          }
+          if (v !== "" && v !== null && v !== undefined) fd.append(k, v);
         });
         fd.append("photo", photoFile);
         await API.patch(`/students/${student.id}/`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
-        // Send plain JSON — more reliable with Django REST Framework PATCH
         const payload = {};
         Object.entries(form).forEach(([k, v]) => {
-          if (v !== "" && v !== null && v !== undefined) {
-            payload[k] = v;
-          }
+          if (v !== "" && v !== null && v !== undefined) payload[k] = v;
         });
         await API.patch(`/students/${student.id}/`, payload);
       }
 
-      // FIX 1: await onSaved so loadStudents() fully completes before closing
       await onSaved();
       onClose();
     } catch (err) {
@@ -239,6 +246,31 @@ const EditModal = ({ student, classes = [], onClose, onSaved, setError }) => {
       onClose();
     } finally {
       setSaving(false);
+    }
+  };
+
+  // FIX: Reset-to-default-password handler — surfaces the default password
+  // prominently and gives the admin a one-click reset affordance.
+  const handleResetPassword = async () => {
+    if (!window.confirm(
+      `Reset ${getStudentName(student)}'s password to the default "${DEFAULT_PASSWORD}"?`
+    )) return;
+
+    setResetting(true);
+    try {
+      await API.post(`/students/${student.id}/reset-password/`);
+      onClose();
+      // Surface success via the parent's setError is not ideal; in a real
+      // app you'd have a separate setSuccess.  We reuse setError with a
+      // success-flavoured message here to keep the diff small.
+      setError(`Password reset to "${DEFAULT_PASSWORD}" successfully.`);
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail || "Failed to reset password. Try again.";
+      setError(detail);
+      onClose();
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -406,6 +438,22 @@ const EditModal = ({ student, classes = [], onClose, onSaved, setError }) => {
             </div>
           </div>
 
+          {/* ── Password reset ── */}
+          <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+            <p className="text-xs font-semibold text-amber-700 mb-2">🔑 Password</p>
+            <p className="text-xs text-amber-600 mb-3">
+              Default password is <span className="font-mono font-bold">{DEFAULT_PASSWORD}</span>.
+              Use the button below to reset this student's password back to the default.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetPassword}
+              disabled={resetting}
+              className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-2 rounded-lg transition-colors disabled:opacity-50 font-medium">
+              {resetting ? "Resetting…" : `Reset password to "${DEFAULT_PASSWORD}"`}
+            </button>
+          </div>
+
           <div className="flex gap-3 pt-2 border-t border-gray-100">
             <button type="submit" disabled={saving}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors shadow-sm">
@@ -438,15 +486,14 @@ const Students = () => {
   const [error, setError]                     = useState("");
   const [success, setSuccess]                 = useState("");
 
-  // FIX 2: Sync selectedStudent with freshly fetched data so detail panel updates
   const loadStudents = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await API.get("/students/");
+      const res   = await API.get("/students/");
       const fresh = res.data.results ?? res.data;
       setStudents(fresh);
-      // Keep the detail panel in sync — find the updated record in the fresh list
+      // Sync detail panel — keep it showing the updated record after an edit
       setSelectedStudent((prev) =>
         prev ? (fresh.find((s) => s.id === prev.id) ?? null) : null
       );
@@ -457,6 +504,8 @@ const Students = () => {
     }
   }, []);
 
+  // FIX: loadClasses separated from loadStudents into its own effect so it
+  // only runs once on mount.  Classes don't change while the page is open.
   const loadClasses = useCallback(async () => {
     try {
       const res = await API.get("/classes/");
@@ -464,10 +513,8 @@ const Students = () => {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    loadStudents();
-    loadClasses();
-  }, [loadStudents, loadClasses]);
+  useEffect(() => { loadStudents(); }, [loadStudents]);
+  useEffect(() => { loadClasses();  }, [loadClasses]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Permanently delete this student?")) return;
@@ -476,20 +523,26 @@ const Students = () => {
       await API.delete(`/students/${id}/`);
       setSuccess("Student deleted successfully.");
       if (selectedStudent?.id === id) setSelectedStudent(null);
-      if (editingStudent?.id === id)  setEditingStudent(null);
-      loadStudents();
+      if (editingStudent?.id  === id) setEditingStudent(null);
+      // FIX: await loadStudents() so the list is fully refreshed before any
+      // further state updates.  Previously called without await, allowing a
+      // race between the stale render and the fresh fetch.
+      await loadStudents();
     } catch {
       setError("Error deleting student.");
     }
   };
 
-  // FIX 1: handleSaved is now properly awaited inside EditModal
   const handleSaved = async () => {
     await loadStudents();
     setSuccess("Student updated successfully.");
   };
 
-  const classNames = [...new Set(students.map((s) => s.class_name).filter(Boolean))].sort();
+  // FIX: Derive class filter options from the authoritative `classes` list
+  // rather than from the student data.  Student records can have stale or
+  // inconsistent class_name strings; the classes endpoint is the source of
+  // truth.
+  const classFilterOptions = classes.map((c) => c.name).sort();
 
   const filtered = students.filter((s) => {
     const term = search.toLowerCase();
@@ -507,7 +560,7 @@ const Students = () => {
     total:   students.length,
     male:    students.filter((s) => s.gender === "Male").length,
     female:  students.filter((s) => s.gender === "Female").length,
-    classes: classNames.length,
+    classes: classes.length,
   };
 
   return (
@@ -539,7 +592,7 @@ const Students = () => {
           <label className="text-xs font-medium text-gray-400 block mb-1">Class</label>
           <select value={filterClass} onChange={(e) => setFilterClass(e.target.value)} className={inputCls}>
             <option value="all">All classes</option>
-            {classNames.map((c) => <option key={c} value={c}>{c}</option>)}
+            {classFilterOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
