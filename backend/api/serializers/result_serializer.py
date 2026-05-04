@@ -3,10 +3,13 @@ from apps.results.models import Result
 
 
 class ResultSerializer(serializers.ModelSerializer):
-
     student_name = serializers.SerializerMethodField()
     subject_name = serializers.SerializerMethodField()
-    class_name   = serializers.SerializerMethodField()
+
+    # FIX: Removed school_class and class_name entirely — the school_class FK
+    # no longer exists on Result (it was removed from the model to avoid silent
+    # inconsistency with student.school_class).  Any caller that needs the
+    # class name should read student.school_class.name directly.
 
     class Meta:
         model = Result
@@ -16,13 +19,12 @@ class ResultSerializer(serializers.ModelSerializer):
             "student_name",
             "subject",
             "subject_name",
-            "school_class",
-            "class_name",
             "term",
-            "reopen",
+            "year",
             "ca",
+            "reopen",
             "exams",
-            "score",           # computed on model.save(), read-only
+            "score",            # computed on model.save(), read-only
             "subject_position",
             "created_at",
         ]
@@ -36,6 +38,3 @@ class ResultSerializer(serializers.ModelSerializer):
 
     def get_subject_name(self, obj):
         return obj.subject.name if obj.subject else "-"
-
-    def get_class_name(self, obj):
-        return obj.school_class.name if obj.school_class else "-"
