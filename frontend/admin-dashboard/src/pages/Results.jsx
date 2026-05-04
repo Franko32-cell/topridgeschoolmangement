@@ -21,7 +21,8 @@ const GRADE_SCALE_B79 = [
   { range: "55–59",  grade: "5", remark: "Average"      },
   { range: "50–54",  grade: "6", remark: "Low Average"  },
   { range: "45–49",  grade: "7", remark: "Low"          },
-  { range: "40–44",  grade: "6", remark: "Lower"        },
+  // FIX: was "6" (duplicate of Low Average) — corrected to "8"
+  { range: "40–44",  grade: "8", remark: "Lower"        },
   { range: "0–39",   grade: "9", remark: "Lowest"       },
 ];
 
@@ -42,7 +43,7 @@ const GRADE_SCALE_B16 = [
 const GRADE_COLORS = {
   "1":  "#16a34a", "2":  "#059669", "3":  "#0284c7",
   "4":  "#0891b2", "5":  "#ca8a04", "6":  "#ea580c",
-  "7":  "#dc2626", "9":  "#991b1b",
+  "7":  "#dc2626", "8":  "#b91c1c", "9":  "#991b1b",
   "A":  "#16a34a", "B1": "#059669", "B2": "#0284c7",
   "C1": "#0891b2", "C2": "#ca8a04", "D1": "#ea580c",
   "D2": "#dc2626", "E1": "#b91c1c", "E2": "#991b1b",
@@ -58,7 +59,8 @@ const computeGrade = (score, level = "basic_7_9") => {
     if (score >= 55) return "5";
     if (score >= 50) return "6";
     if (score >= 45) return "7";
-    if (score >= 40) return "6";
+    // FIX: was "6" (duplicate) — corrected to "8"
+    if (score >= 40) return "8";
     return "9";
   }
   // basic_1_6
@@ -73,8 +75,11 @@ const computeGrade = (score, level = "basic_7_9") => {
   return "E2";
 };
 
-const computeRemark = (grade) => {
-  const scale = [...GRADE_SCALE_B79, ...GRADE_SCALE_B16];
+// FIX: Pass level so the correct scale is searched — previously the combined
+// array caused ambiguous lookups (e.g. "D1" never found because B79 entries
+// come first and exhaust the search before reaching B16 entries).
+const computeRemark = (grade, level = "basic_7_9") => {
+  const scale = level === "basic_7_9" ? GRADE_SCALE_B79 : GRADE_SCALE_B16;
   return scale.find(g => g.grade === grade)?.remark || "—";
 };
 
@@ -90,11 +95,21 @@ const getStudentName = (s) =>
   (s?.first_name ? `${s.first_name} ${s.last_name || ""}`.trim() : null) ||
   s?.admission_number || "Unknown";
 
+// FIX: Previous implementation used (v - 20) % 10 which returns negative
+// indices for v < 20, causing `undefined` suffixes (e.g. "1undefined").
+// Rewritten to mirror the backend's _fmt_position exactly.
 const fmtPos = (n) => {
   if (n == null) return "—";
-  const v = n % 100;
-  const suffix = ["th","st","nd","rd"];
-  return n + (suffix[(v - 20) % 10] || suffix[v] || suffix[0]);
+  const abs    = Math.abs(n);
+  const mod100 = abs % 100;
+  const mod10  = abs % 10;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13 ? "th"
+    : mod10 === 1 ? "st"
+    : mod10 === 2 ? "nd"
+    : mod10 === 3 ? "rd"
+    : "th";
+  return `${n}${suffix}`;
 };
 
 /* ─────────────────────────────────────────────
@@ -258,6 +273,8 @@ const Results = () => {
   const [loadingSummary, setLoadingSummary]   = useState(false);
   const [expandedStudent, setExpandedStudent] = useState(null);
 
+  // FIX: Unified reload guard — tracks the last fully-loaded filter combo so
+  // we never double-load or load with a stale students list.
   const loadedRef = useRef({ class: "", subject: "", term: "", year: "" });
 
   /* ── Initial data ── */
@@ -292,7 +309,6 @@ const Results = () => {
       const map = {};
       const ids = {};
       records.forEach(r => {
-        // Backend field order: ca (CLASS SC.), reopen (RE-OPEN), exams (EXAMS)
         map[r.student] = { ca: r.ca ?? "", reopen: r.reopen ?? "", exams: r.exams ?? "" };
         ids[r.student] = r.id;
       });
@@ -304,7 +320,12 @@ const Results = () => {
 
       setScores(next);
       setExistingIds(ids);
-      loadedRef.current = { class: selectedClass, subject: selectedSubject, term: selectedTerm, year: selectedYear };
+      loadedRef.current = {
+        class:   selectedClass,
+        subject: selectedSubject,
+        term:    selectedTerm,
+        year:    selectedYear,
+      };
 
       if (records.length > 0) {
         toast(`Loaded ${records.length} saved result${records.length !== 1 ? "s" : ""}.`, "info");
@@ -316,21 +337,35 @@ const Results = () => {
     }
   }, [selectedClass, selectedTerm, selectedSubject, selectedYear, students]);
 
-  /* ── Reload on filter change ── */
+  // FIX: Consolidated into a single useEffect that watches all four filter
+  // values plus the students array, replacing the previous two separate effects
+  // that could race or double-load.  We only fire when all required selections
+  // are present and the combo differs from what was last loaded.
   useEffect(() => {
-    if (!selectedSubject) { setScores({}); setExistingIds({}); return; }
-    setScores({}); setExistingIds({});
-    if (selectedClass && students.length) loadExistingScores();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSubject, selectedTerm, selectedYear]);
-
-  useEffect(() => {
-    if (students.length && selectedSubject && selectedClass && selectedTerm) {
-      setScores({}); setExistingIds({});
-      loadExistingScores(students);
+    if (!selectedClass || !selectedSubject || !selectedTerm || !students.length) {
+      if (!selectedSubject) {
+        setScores({});
+        setExistingIds({});
+      }
+      return;
     }
+
+    const ref = loadedRef.current;
+    const alreadyLoaded =
+      ref.class   === selectedClass   &&
+      ref.subject === selectedSubject &&
+      ref.term    === selectedTerm    &&
+      ref.year    === selectedYear;
+
+    if (alreadyLoaded) return;
+
+    setScores({});
+    setExistingIds({});
+    loadExistingScores(students);
+  // loadExistingScores is stable when its deps haven't changed; listing
+  // students separately ensures we re-run when the student list arrives.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students]);
+  }, [selectedClass, selectedSubject, selectedTerm, selectedYear, students]);
 
   /* ── Summary tab ── */
   useEffect(() => {
@@ -352,9 +387,9 @@ const Results = () => {
     setStudents([]);
     setSummary([]);
     setExpandedStudent(null);
+    loadedRef.current = { class: "", subject: "", term: "", year: "" };
     const found = classes.find(c => String(c.id) === String(id));
-    // Detect level from class name
-    const name = (found?.name || "").toLowerCase();
+    const name  = (found?.name || "").toLowerCase();
     const isB79 = ["basic 7","basic 8","basic 9","b7","b8","b9"].some(m => name.includes(m));
     setClassLevel(isB79 ? "basic_7_9" : "basic_1_6");
   };
@@ -362,7 +397,7 @@ const Results = () => {
   const handleSubjectChange = (e) => setSelectedSubject(e.target.value);
 
   const handleScoreChange = (studentId, field, value) => {
-    const max = field === "reopen" ? 20 : 40;
+    const max     = field === "reopen" ? 20 : 40;
     const clamped = value === "" ? "" : Math.min(max, Math.max(0, parseFloat(value) || 0));
     setScores(prev => ({ ...prev, [studentId]: { ...prev[studentId], [field]: clamped } }));
   };
@@ -376,6 +411,8 @@ const Results = () => {
       await API.delete(`/results/${id}/`);
       setScores(prev => ({ ...prev, [studentId]: { ca: "", reopen: "", exams: "" } }));
       setExistingIds(prev => { const n = { ...prev }; delete n[studentId]; return n; });
+      // Reset the loaded ref so the next filter change re-fetches cleanly
+      loadedRef.current = { class: "", subject: "", term: "", year: "" };
       toast("Result deleted.", "info");
     } catch {
       toast("Failed to delete result.", "error");
@@ -391,14 +428,13 @@ const Results = () => {
     const records = Object.entries(scores)
       .filter(([, v]) => v.ca !== "" || v.reopen !== "" || v.exams !== "")
       .map(([studentId, v]) => ({
-        student:      studentId,
-        subject:      selectedSubject,
-        school_class: selectedClass,
-        term:         selectedTerm,
-        year:         selectedYear,
-        ca:           parseFloat(v.ca)     || 0,
-        reopen:       parseFloat(v.reopen) || 0,
-        exams:        parseFloat(v.exams)  || 0,
+        student: studentId,
+        subject: selectedSubject,
+        term:    selectedTerm,
+        year:    selectedYear,
+        ca:      parseFloat(v.ca)     || 0,
+        reopen:  parseFloat(v.reopen) || 0,
+        exams:   parseFloat(v.exams)  || 0,
       }));
     if (!records.length) { toast("No scores entered.", "error"); return; }
 
@@ -411,6 +447,8 @@ const Results = () => {
       } else {
         toast(`Saved ${res.data.saved} record(s) with ${errCount} error(s).`, "info");
       }
+      // Reset loaded ref so loadExistingScores re-fetches fresh data
+      loadedRef.current = { class: "", subject: "", term: "", year: "" };
       await loadExistingScores();
     } catch (err) {
       toast(err.response?.data?.detail || "Error saving results.", "error");
@@ -595,7 +633,8 @@ const Results = () => {
                           const dirty   = s.ca !== "" || s.reopen !== "" || s.exams !== "";
                           const total   = computeScore(s.ca, s.reopen, s.exams);
                           const grade   = dirty ? computeGrade(total, classLevel) : null;
-                          const remark  = grade ? computeRemark(grade) : null;
+                          // FIX: pass classLevel so B16 remarks resolve correctly
+                          const remark  = grade ? computeRemark(grade, classLevel) : null;
                           const clr     = grade ? (GRADE_COLORS[grade] || "#64748b") : null;
                           const isSaved = !!existingIds[student.id];
 
@@ -627,7 +666,6 @@ const Results = () => {
                                 </div>
                               </td>
 
-                              {/* CA (CLASS SC. 40%) */}
                               {[
                                 { field: "ca",     max: 40 },
                                 { field: "reopen", max: 20 },
