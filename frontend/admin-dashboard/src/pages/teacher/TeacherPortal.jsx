@@ -90,13 +90,6 @@ const todayStr = new Date().toISOString().split("T")[0];
 
 // ─────────────────────────────────────────────
 // Score breakdown helpers
-//
-// Re-Open : reopen_raw/10 + rda/10 → direct sum → /20
-// CA      : (hw+cw+ct)/110 × 25   → /25
-// MGT Test: mgt_raw direct         → /15
-// CA+MGT combined stored as `ca`  → /40
-// Exams   : (exam_raw/100) × 40   → /40
-// Total                            → /100
 // ─────────────────────────────────────────────
 
 const calcReopenScore = (breakdown) => {
@@ -145,7 +138,7 @@ const fmtPos = (n) => {
 };
 
 // ─────────────────────────────────────────────
-// Breakdown label helpers (sub-text under score buttons)
+// Breakdown label helpers
 // ─────────────────────────────────────────────
 
 const getReopenBreakdown = (breakdowns, studentId) => {
@@ -167,7 +160,7 @@ const getExamsBreakdown = (breakdowns, studentId) => {
 };
 
 // ─────────────────────────────────────────────
-// Toast hook (from TeacherPortalResults)
+// Toast hook
 // ─────────────────────────────────────────────
 
 let _toastId = 0;
@@ -182,7 +175,7 @@ function useToast() {
 }
 
 // ─────────────────────────────────────────────
-// Styles (modal + score cells + toast + skeleton + legend)
+// Styles
 // ─────────────────────────────────────────────
 
 const PORTAL_STYLES = `
@@ -195,7 +188,6 @@ const PORTAL_STYLES = `
   @keyframes tp-slideIn       { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:translateX(0)} }
   @keyframes tp-shimmer       { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
-  /* ── Modals ── */
   .tp-modal-backdrop {
     position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(4px);
     z-index:1000; display:flex; align-items:center; justify-content:center; padding:16px;
@@ -263,13 +255,11 @@ const PORTAL_STYLES = `
   }
   .tp-modal-btn-apply:hover { background:#1e293b; transform:translateY(-1px); box-shadow:0 4px 12px rgba(15,23,42,.2); }
 
-  /* Pill labels */
   .tp-pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; }
   .tp-pill-blue   { background:#eff6ff; color:#1d4ed8; }
   .tp-pill-purple { background:#f5f3ff; color:#6d28d9; }
   .tp-pill-green  { background:#f0fdf4; color:#166534; }
 
-  /* ── Score buttons ── */
   .tp-score-cell { display:flex; flex-direction:column; align-items:center; gap:3px; }
   .tp-score-btn {
     min-width:72px; padding:6px 10px; border-radius:8px;
@@ -284,20 +274,17 @@ const PORTAL_STYLES = `
   .tp-score-btn-empty       { border-color:#e2e8f0; color:#94a3b8; font-weight:400; }
   .tp-score-breakdown       { font-size:10px; color:#94a3b8; white-space:nowrap; font-family:'DM Mono',monospace; }
 
-  /* ── Saved dot ── */
   .tp-saved-dot {
     display:inline-block; width:6px; height:6px; border-radius:50%;
     background:#10b981; margin-right:4px; vertical-align:middle;
   }
 
-  /* ── Skeleton shimmer ── */
   .tp-skeleton {
     height:13px; border-radius:5px;
     background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);
     background-size:200% 100%; animation:tp-shimmer 1.4s infinite;
   }
 
-  /* ── Grade legend ── */
   .tp-legend {
     display:flex; flex-wrap:wrap; gap:5px; margin-top:0;
     padding:12px 14px; background:#fff; border-top:1px solid #f1f5f9;
@@ -312,7 +299,6 @@ const PORTAL_STYLES = `
     font-size:11px; font-weight:700; letter-spacing:.3px; font-family:'DM Mono',monospace;
   }
 
-  /* ── Toast ── */
   .tp-toast-wrap {
     position:fixed; top:20px; right:20px; z-index:9999;
     display:flex; flex-direction:column; gap:8px; pointer-events:none;
@@ -368,7 +354,7 @@ const EyeIcon = ({ open }) =>
   );
 
 // ─────────────────────────────────────────────
-// REOPEN MODAL – Re-Open /10 + RDA /10 = /20
+// REOPEN MODAL
 // ─────────────────────────────────────────────
 
 function ReopenModal({ studentName, initial, onApply, onClose }) {
@@ -442,9 +428,6 @@ function ReopenModal({ studentName, initial, onApply, onClose }) {
 
 // ─────────────────────────────────────────────
 // CA / MGT MODAL
-// CA  : hw(4×5=20) + cw(4×10=40) + ct(10+10+10+20=50) = /110 → scaled to /25
-// MGT : single raw entry → /15
-// Combined → /40
 // ─────────────────────────────────────────────
 
 function CAModal({ studentName, initial, onApply, onClose }) {
@@ -483,7 +466,6 @@ function CAModal({ studentName, initial, onApply, onClose }) {
           <button className="tp-modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="tp-modal-body">
-          {/* Preview */}
           <div className="tp-modal-preview">
             <div className="tp-preview-item">
               <span style={{fontSize:"12px",color:"#64748b",fontFamily:"'DM Mono',monospace"}}>{caOnly.toFixed(1)}/25</span>
@@ -509,7 +491,6 @@ function CAModal({ studentName, initial, onApply, onClose }) {
             </div>
           </div>
 
-          {/* CA Section */}
           <div className="tp-modal-section">
             <div className="tp-section-label">
               <span style={{display:"flex",alignItems:"center",gap:"6px"}}>
@@ -578,7 +559,6 @@ function CAModal({ studentName, initial, onApply, onClose }) {
 
           <div className="tp-divider" />
 
-          {/* MGT Section */}
           <div className="tp-modal-section">
             <div className="tp-section-label">
               <span style={{display:"flex",alignItems:"center",gap:"6px"}}>
@@ -621,7 +601,7 @@ function CAModal({ studentName, initial, onApply, onClose }) {
 }
 
 // ─────────────────────────────────────────────
-// EXAMS MODAL — raw /100 → /40
+// EXAMS MODAL
 // ─────────────────────────────────────────────
 
 function ExamsModal({ studentName, initial, onApply, onClose }) {
@@ -854,7 +834,6 @@ const KpiCard = ({ label, value, color = "text-slate-800", sub }) => (
   </div>
 );
 
-// Inline Alert – kept for non-results tabs; Results tab uses toast instead
 const Alert = ({ message, type, onDismiss }) => {
   if (!message) return null;
   const s = type === "error"
@@ -889,7 +868,6 @@ const Th = ({ children, center }) => (
   </th>
 );
 
-// Shared icons for score buttons
 const EditIcon = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -909,6 +887,10 @@ const AddIcon = () => (
 const TeacherPortal = () => {
   const user = getUser();
   const { toasts, add: toast } = useToast();
+
+  // ── Derive display name: prefer full_name, then name, fall back to username ──
+  const displayName = user.full_name || user.name || user.username || "";
+  const avatarLetter = displayName?.[0]?.toUpperCase() ?? "T";
 
   // Inject styles once
   useEffect(() => {
@@ -946,7 +928,6 @@ const TeacherPortal = () => {
   const [deleting, setDeleting]               = useState(null);
   const [scoreModal, setScoreModal]           = useState(null);
 
-  // loadedRef prevents redundant fetches when filters haven't changed
   const loadedRef = useRef({ class: "", subject: "", term: "", year: "" });
 
   const [selectedStudent, setSelectedStudent]   = useState("");
@@ -1090,7 +1071,6 @@ const TeacherPortal = () => {
       loadAttendance(selectedClass, attDate, students);
   }, [tab, attDate, selectedClass, students, loadAttendance]);
 
-  // Guard against redundant fetches via loadedRef
   useEffect(() => {
     if (tab !== "Results" || !selectedClass || !selectedSubject || !selectedTerm || !students.length) {
       if (!selectedSubject) { setScores({}); setExistingIds({}); setBreakdowns({}); }
@@ -1143,8 +1123,6 @@ const TeacherPortal = () => {
     } catch { setError("Failed to save attendance."); }
     finally { setSavingAtt(false); }
   };
-
-  // ── Score modal apply handlers ────────────────────────────────────────────
 
   const applyReopen = (score, breakdown) => {
     const { studentId } = scoreModal;
@@ -1302,13 +1280,20 @@ const TeacherPortal = () => {
       {/* ── Header ── */}
       <header className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
+
+          {/* ── Avatar + Name / ID ── */}
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {user.username?.[0]?.toUpperCase()}
+              {avatarLetter}
             </div>
             <div>
-              <p className="font-bold text-slate-800 text-sm leading-tight">{user.username}</p>
-              <p className="text-slate-400 text-xs">{user.teacher_id}{user.subject ? ` · ${user.subject}` : ""}</p>
+              {/* Primary: teacher's full name */}
+              <p className="font-bold text-slate-800 text-sm leading-tight">{displayName}</p>
+              {/* Secondary: teacher ID · subject */}
+              <p className="text-slate-400 text-xs">
+                {user.teacher_id}
+                {user.subject ? ` · ${user.subject}` : ""}
+              </p>
             </div>
           </div>
 
@@ -1520,7 +1505,6 @@ const TeacherPortal = () => {
 
             {selectedSubject && (
               <>
-                {/* KPI bar */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
                   <KpiCard label="Filled"    value={`${filledCount} / ${students.length}`} color="text-blue-600" />
                   <KpiCard label="Saved"     value={savedCount}     color="text-emerald-600" />
@@ -1528,7 +1512,6 @@ const TeacherPortal = () => {
                   <KpiCard label="Below 50%" value={below50Count}   color="text-red-600" />
                 </div>
 
-                {/* Status bar */}
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-6 text-sm">
                     <span className="flex items-center gap-1.5 text-slate-500">
@@ -1551,9 +1534,7 @@ const TeacherPortal = () => {
                   </p>
                 </div>
 
-                {/* Table */}
                 {loadingStudents ? (
-                  /* Shimmer skeleton */
                   <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
                     <table style={{width:"100%",borderCollapse:"collapse"}}>
                       <tbody>
@@ -1617,7 +1598,6 @@ const TeacherPortal = () => {
                               <tr key={student.id} className="hover:bg-blue-50/20 transition-colors">
                                 <td className="px-4 py-3 text-slate-400 text-xs">{i + 1}</td>
 
-                                {/* Student name + saved indicator */}
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
                                     <div style={{
@@ -1640,7 +1620,6 @@ const TeacherPortal = () => {
                                   </div>
                                 </td>
 
-                                {/* RE-OPEN */}
                                 <td className="px-3 py-2.5 text-center">
                                   <div className="tp-score-cell">
                                     <button
@@ -1652,7 +1631,6 @@ const TeacherPortal = () => {
                                   </div>
                                 </td>
 
-                                {/* CA / MGT */}
                                 <td className="px-3 py-2.5 text-center">
                                   <div className="tp-score-cell">
                                     <button
@@ -1664,7 +1642,6 @@ const TeacherPortal = () => {
                                   </div>
                                 </td>
 
-                                {/* EXAMS */}
                                 <td className="px-3 py-2.5 text-center">
                                   <div className="tp-score-cell">
                                     <button
@@ -1676,7 +1653,6 @@ const TeacherPortal = () => {
                                   </div>
                                 </td>
 
-                                {/* Total */}
                                 <td className="px-4 py-3 text-center">
                                   {total !== null ? (
                                     <span className={`font-black tabular-nums font-mono ${total >= 50 ? "text-blue-700" : "text-red-600"}`}>
@@ -1685,7 +1661,6 @@ const TeacherPortal = () => {
                                   ) : <span className="text-slate-300">—</span>}
                                 </td>
 
-                                {/* Grade */}
                                 <td className="px-4 py-3 text-center">
                                   {grade ? (
                                     <span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold"
@@ -1695,12 +1670,10 @@ const TeacherPortal = () => {
                                   ) : <span className="text-slate-300 text-xs">—</span>}
                                 </td>
 
-                                {/* Remark */}
                                 <td className="px-4 py-3 text-center" style={{fontSize:"12px", color: info ? info.color : "#cbd5e1"}}>
                                   {info ? info.label : "—"}
                                 </td>
 
-                                {/* Action */}
                                 <td className="px-4 py-3 text-center">
                                   {isSaved && (
                                     <button
@@ -1718,7 +1691,6 @@ const TeacherPortal = () => {
                       </table>
                     </div>
 
-                    {/* Grade scale legend (pill style from TeacherPortalResults) */}
                     <div className="tp-legend">
                       <span style={{fontSize:"10.5px",fontWeight:"700",color:"#475569",marginRight:"3px",alignSelf:"center"}}>SCALE:</span>
                       {gradeScale.map(item => {
@@ -1735,7 +1707,6 @@ const TeacherPortal = () => {
                   </div>
                 )}
 
-                {/* Save bar */}
                 {students.length > 0 && (
                   <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
                     <p className="text-sm text-slate-400">
