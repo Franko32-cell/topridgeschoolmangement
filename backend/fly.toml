@@ -1,5 +1,5 @@
 # backend/fly.toml
-app = "your-backend-app-name"
+app = "backend"
 primary_region = "iad"
 
 [build]
@@ -7,7 +7,7 @@ primary_region = "iad"
 
 [env]
   PORT = "8000"
-  DJANGO_SETTINGS_MODULE = "your_project_name.settings"
+  DJANGO_SETTINGS_MODULE = "top-ridge-school.settings"
 
 [http_service]
   internal_port = 8000
