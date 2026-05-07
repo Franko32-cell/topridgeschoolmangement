@@ -1,5 +1,5 @@
 # frontend/fly.toml
-app = "your-frontend-app-name"
+app = "top-ridge-school-6hcbdg"
 primary_region = "iad"
 
 [build]
