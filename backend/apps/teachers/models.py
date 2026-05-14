@@ -28,9 +28,8 @@ class Teacher(models.Model):
     hire_date = models.DateField()
     phone = models.CharField(max_length=30, blank=True, default="")
     email = models.EmailField(blank=True, default="")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     class Meta:
         ordering = ["user__last_name", "user__first_name"]
         indexes = [
