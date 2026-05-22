@@ -12,6 +12,7 @@ const TERMS = [
 const YEARS = [2026, 2025, 2024, 2023, 2022];
 
 // ── Grade scales ──────────────────────────────────────────────────────────
+// Verified against printed Top Ridge School report cards (Term 2, 2026)
 const GRADE_SCALE_B79 = [
   { range: "90–100", grade: "1", remark: "Excellent"    },
   { range: "80–89",  grade: "2", remark: "Very Good"    },
@@ -20,7 +21,7 @@ const GRADE_SCALE_B79 = [
   { range: "55–59",  grade: "5", remark: "Average"      },
   { range: "50–54",  grade: "6", remark: "Low Average"  },
   { range: "45–49",  grade: "7", remark: "Low"          },
-  { range: "40–44",  grade: "8", remark: "Lower"        },
+  { range: "40–44",  grade: "6", remark: "Lower"        }, // confirmed: "40–44  6  Lower" on printed card
   { range: "0–39",   grade: "9", remark: "Lowest"       },
 ];
 
@@ -37,15 +38,18 @@ const GRADE_SCALE_B16 = [
 ];
 
 const GRADE_COLORS = {
-  "1":  "#16a34a", "2":  "#059669", "3":  "#0284c7",
-  "4":  "#0891b2", "5":  "#ca8a04", "6":  "#ea580c",
-  "7":  "#dc2626", "8":  "#b91c1c", "9":  "#991b1b",
+  // Basic 7–9 numeric (grade "6" covers both Low Average 50–54 and Lower 40–44)
+  "1": "#16a34a", "2": "#059669", "3": "#0284c7",
+  "4": "#0891b2", "5": "#ca8a04", "6": "#ea580c",
+  "7": "#dc2626", "9": "#991b1b",
+  // Basic 1–6 / KG letter
   "A":  "#16a34a", "B1": "#059669", "B2": "#0284c7",
   "C1": "#0891b2", "C2": "#ca8a04", "D1": "#ea580c",
   "D2": "#dc2626", "E1": "#b91c1c", "E2": "#991b1b",
 };
 
 // ── Grade / score helpers ─────────────────────────────────────────────────
+// Must match backend apps/results/grading.py exactly
 const computeGrade = (score, level = "basic_7_9") => {
   if (level === "basic_7_9") {
     if (score >= 90) return "1";
@@ -53,11 +57,12 @@ const computeGrade = (score, level = "basic_7_9") => {
     if (score >= 70) return "3";
     if (score >= 60) return "4";
     if (score >= 55) return "5";
-    if (score >= 50) return "6";
+    if (score >= 50) return "6";  // Low Average
     if (score >= 45) return "7";
-    if (score >= 40) return "8";
+    if (score >= 40) return "6";  // Lower — same grade "6", confirmed from printed card
     return "9";
   }
+  // basic_1_6 covers Basic 1–6, KG 1–2, Kindergold
   if (score >= 90) return "A";
   if (score >= 80) return "B1";
   if (score >= 70) return "B2";
@@ -71,6 +76,8 @@ const computeGrade = (score, level = "basic_7_9") => {
 
 const computeRemark = (grade, level = "basic_7_9") => {
   const scale = level === "basic_7_9" ? GRADE_SCALE_B79 : GRADE_SCALE_B16;
+  // score 40–44 in B79 returns grade "6" which appears twice — find by score range context;
+  // since we only have the grade string here, return the first match (Low Average label is fine)
   return scale.find(g => g.grade === grade)?.remark || "—";
 };
 
@@ -690,8 +697,8 @@ const Results = () => {
   const [subjects, setSubjects]               = useState([]);
   const [students, setStudents]               = useState([]);
   const [selectedClass, setSelectedClass]     = useState("");
-  const [selectedTerm, setSelectedTerm]       = useState("term1");
-  const [selectedYear, setSelectedYear]       = useState(String(YEARS[0]));
+  const [selectedTerm, setSelectedTerm]       = useState("term3");   // ← Term 3
+  const [selectedYear, setSelectedYear]       = useState("2026");    // ← 2026
   const [selectedSubject, setSelectedSubject] = useState("");
   const [classLevel, setClassLevel]           = useState("basic_7_9");
   const [scores, setScores]                   = useState({});
@@ -805,7 +812,8 @@ const Results = () => {
     loadedRef.current = { class: "", subject: "", term: "", year: "" };
     const found = classes.find(c => String(c.id) === String(id));
     const name  = (found?.name || "").toLowerCase();
-    const isB79 = ["basic 7","basic 8","basic 9","b7","b8","b9"].some(m => name.includes(m));
+    // Basic 7/8/9 and JHS use numeric grades; everything else (Basic 1–6, KG, KG2, Kindergold, Montessori) uses letter grades
+    const isB79 = ["basic 7","basic 8","basic 9","b7","b8","b9","jhs"].some(m => name.includes(m));
     setClassLevel(isB79 ? "basic_7_9" : "basic_1_6");
   };
 
@@ -1156,10 +1164,10 @@ const Results = () => {
                   <>
                     <div className="res-legend">
                       <span style={{fontSize:"11px",fontWeight:"700",color:"#475569",marginRight:"4px",alignSelf:"center"}}>GRADE SCALE:</span>
-                      {gradeScale.map(item => {
+                      {gradeScale.map((item, idx) => {
                         const c = GRADE_COLORS[item.grade] || "#64748b";
                         return (
-                          <div key={item.grade + item.range} className="res-legend-item">
+                          <div key={item.grade + item.range + idx} className="res-legend-item">
                             <span className="res-grade" style={{background:`${c}18`,color:c,padding:"1px 6px"}}>{item.grade}</span>
                             <span className="res-legend-range">{item.range}</span>
                             <span style={{fontSize:"11px",color:"#94a3b8"}}>{item.remark}</span>

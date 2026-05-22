@@ -1,5 +1,13 @@
+"""
+api/views/attendance_view.py
+
+Changes vs previous version:
+- Added `year` query param filter
+- Default term in upsert is now "term3" (current term)
+"""
+
 from django.db.models import QuerySet
-from rest_framework import viewsets, filters
+from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from apps.attendance.models import Attendance
@@ -15,6 +23,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
       ?school_class=<id>
       ?student=<id>
       ?term=term1|term2|term3
+      ?year=2026
     """
 
     serializer_class   = AttendanceSerializer
@@ -29,8 +38,9 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             .all()
         )
         params = self.request.query_params
-        if date  := params.get("date"):        qs = qs.filter(date=date)
-        if cls   := params.get("school_class"): qs = qs.filter(school_class_id=cls)
-        if stu   := params.get("student"):      qs = qs.filter(student_id=stu)
-        if term  := params.get("term"):         qs = qs.filter(term=term)
+        if date  := params.get("date"):         qs = qs.filter(date=date)
+        if cls   := params.get("school_class"):  qs = qs.filter(school_class_id=cls)
+        if stu   := params.get("student"):       qs = qs.filter(student_id=stu)
+        if term  := params.get("term"):          qs = qs.filter(term=term)
+        if year  := params.get("year"):          qs = qs.filter(year=year)
         return qs

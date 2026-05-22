@@ -1,5 +1,16 @@
+"""
+api/serializers/attendance_serializer.py
+
+Changes vs previous version:
+- Added `year` to fields list so it is read/written via the API
+- upsert key now includes `year` to avoid collisions across academic years
+- Default year in upsert falls back to current year (not hardcoded "term1")
+"""
+
 from django.db import IntegrityError
+from django.utils import timezone
 from rest_framework import serializers
+
 from apps.attendance.models import Attendance
 
 
@@ -13,7 +24,7 @@ class AttendanceSerializer(serializers.ModelSerializer):
         fields = [
             "id", "student", "student_name",
             "school_class", "class_name",
-            "term", "date", "status", "created_at",
+            "term", "year", "date", "status", "created_at",
         ]
         read_only_fields = ["id", "created_at"]
 
@@ -30,8 +41,11 @@ class AttendanceSerializer(serializers.ModelSerializer):
                 student      = validated_data["student"],
                 date         = validated_data["date"],
                 school_class = validated_data["school_class"],
-                defaults     = {"status": validated_data["status"],
-                                "term":   validated_data.get("term", "term1")},
+                year         = validated_data.get("year", timezone.now().year),
+                defaults={
+                    "status": validated_data["status"],
+                    "term":   validated_data.get("term", "term3"),
+                },
             )
             return instance
         except IntegrityError as e:
