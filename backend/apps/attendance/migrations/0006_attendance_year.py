@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
             model_name="attendance",
             index=models.Index(
                 fields=["student", "term", "year"],
-                name="attendance_student_term_year_idx",
+                name="attendance_st_term_year_idx",
             ),
         ),
     ]

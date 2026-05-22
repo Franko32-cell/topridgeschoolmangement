@@ -51,7 +51,7 @@ class Attendance(models.Model):
             # Used by StudentReportView when aggregating attendance by term+year
             models.Index(
                 fields=["student", "term", "year"],
-                name="attendance_student_term_year_idx",
+                name="attendance_st_term_year_idx",
             ),
         ]
 
