@@ -15,14 +15,19 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 ALLOWED_HOSTS = [
     "top-ridge-school.onrender.com",
+    "topridgeschoolmangement.onrender.com",
+    "topridgeschool.com",
+    "www.topridgeschool.com",
     "localhost",
     "127.0.0.1",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://top-ridge-school.onrender.com",
+    "https://topridgeschoolmangement.onrender.com",
+    "https://topridgeschool.com",
+    "https://www.topridgeschool.com",
 ]
-
 
 # ── Installed Apps ─────────────────────────────────────────────
 
