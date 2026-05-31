@@ -15,7 +15,7 @@ import axios from "axios";
 
 const BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "https://top-ridge-school.onrender.com/api";
+  "https://topridgeschoolmangement.onrender.com";
 
 const PUBLIC_ENDPOINTS = [
   "/auth/login/",
