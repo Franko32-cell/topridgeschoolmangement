@@ -74,7 +74,7 @@ class TeacherSerializer(serializers.ModelSerializer):
             username=teacher_id.lower(),
             first_name=first_name,
             last_name=last_name,
-            password=User.objects.make_random_password(),  # force reset on first login
+            password=''.join(secrets.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(16)),
             is_active=True,
             **{"role": "teacher"} if hasattr(User, "role") else {},
         )
