@@ -319,7 +319,15 @@ const Teachers = () => {
   });
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
-
+const handleResetPassword = async (id, name) => {
+  if (!window.confirm(`Reset password for ${name} to "teacher123"?`)) return;
+  try {
+    await API.post(`/teachers/${id}/reset_password/`);
+    showToast(`Password reset for ${name}`);
+  } catch {
+    showToast("Failed to reset password", "error");
+  }
+};
   const createTeacher = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -559,6 +567,13 @@ const Teachers = () => {
                         <td className="t-date">{formatDate(t.hire_date)}</td>
                         <td>
                           <div className="t-action-btns">
+                            <button
+                                  className="t-btn t-btn--outline-blue t-btn--sm"
+                                  onClick={() => handleResetPassword(t.id, t.teacher_name)}
+                                  aria-label={`Reset password for ${t.teacher_name}`}
+                                >
+                                  🔑 Reset
+                                </button>
                             <button
                               className="t-btn t-btn--outline-blue t-btn--sm"
                               onClick={() => openEdit(t)}
